@@ -1,0 +1,61 @@
+{
+  "name": "dota-local-skin-changer",
+  "version": "1.0.0",
+  "description": "Editor local de cosméticos de Dota 2",
+  "author": "Dota Local Skin Changer",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "npm run build:renderer && node scripts/start.js",
+    "dev": "node scripts/start.js --dev",
+    "build": "npm run build:exe",
+    "build:renderer": "vite build",
+    "build:exe": "node scripts/build-exe.js",
+    "test": "node --test",
+    "dist": "npm run build:exe",
+    "dist:win": "npm run build:exe",
+    "release:github": "node scripts/release-github.js"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.0",
+    "tailwindcss": "^4.1.0",
+    "vite": "^8.0.0"
+  },
+  "build": {
+    "appId": "local.dota.skinchanger",
+    "productName": "Dota 2 Local Skin Changer",
+    "artifactName": "Dota 2 Local Skin Changer.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "core/**",
+      "dist/**",
+      "package.json"
+    ],
+    "electronFuses": {
+      "runAsNode": false
+    },
+    "win": {
+      "signExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    }
+  }
+}

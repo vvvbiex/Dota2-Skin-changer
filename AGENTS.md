@@ -1,0 +1,1 @@
+Em cada novo chat sobre este projeto, leia primeiro PROJECT_CONTEXT.md. Abra apenas os arquivos necessários para a tarefa. Atualize o contexto no mesmo trabalho que alterar arquitetura, comportamento, bugs, configurações ou validações relevantes.
