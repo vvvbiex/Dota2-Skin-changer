@@ -37,11 +37,11 @@ export function Presets({ owners, choices, presets, presetName, setPresetName, s
       </div>
     })
   }
-  return <>
+  return <div className="view-entry">
     <form className="panel pack-tools" onSubmit={event => { event.preventDefault(); onSave() }}>
-      <input aria-label="Nome do pack" placeholder="Nome do pack" maxLength="80" value={presetName} onChange={event => setPresetName(event.target.value)}/>
-      <button className="primary" disabled={busy || !presetName.trim()}>{presets.some(p => p.name === presetName.trim()) ? 'Atualizar Pack' : 'Salvar Pack'}</button>
-      <button type="button" disabled={busy} onClick={onImport}><Icon name="download"/> Importar Pack (.json)</button>
+      <input aria-label="Nome da predefinição" placeholder="Nome da predefinição" maxLength="80" value={presetName} onChange={event => setPresetName(event.target.value)}/>
+      <button className="primary" disabled={busy || !presetName.trim()}>{presets.some(p => p.name === presetName.trim()) ? 'Atualizar predefinição' : 'Salvar predefinição'}</button>
+      <button type="button" disabled={busy} onClick={onImport}><Icon name="download"/> Importar (.json)</button>
     </form>
     <div className="pack-layout">
       <section aria-labelledby="current-title">
@@ -51,19 +51,19 @@ export function Presets({ owners, choices, presets, presetName, setPresetName, s
         </div>
       </section>
       <section aria-labelledby="saved-title">
-        <div className="section-bar"><h2 id="saved-title">Packs salvos</h2><small>{saved.length} {saved.length === 1 ? 'pack' : 'packs'}</small></div>
+        <div className="section-bar"><h2 id="saved-title">Predefinições salvas</h2><small>{saved.length}</small></div>
         {saved.length ? saved.map(({ pack, rows: entries }) => <article className="panel pack" key={pack.name}>
           <div className="pack-header">
             <div><h3>{pack.name}</h3><small>{entries.length} {entries.length === 1 ? 'slot' : 'slots'}</small></div>
             <div className="pack-actions">
               <button type="button" disabled={busy} onClick={() => onLoad(pack)}>Carregar</button>
-              <button type="button" disabled={busy} onClick={() => onExport(pack)}>Exportar Pack (.json)</button>
+              <button type="button" disabled={busy} onClick={() => onExport(pack)}>Exportar (.json)</button>
             </div>
           </div>
           {rows(entries)}
-        </article>) : <p className="panel empty-message">Nenhum pack salvo.</p>}
+        </article>) : <p className="panel empty-message">Nenhuma predefinição salva.</p>}
       </section>
     </div>
     {store && <p className="path data-path">{store}</p>}
-  </>
+  </div>
 }

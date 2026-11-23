@@ -1,10 +1,11 @@
 import React from 'react'
+import { isIndexingIcons } from './ItemArt.jsx'
 import { Icon } from './ui.jsx'
 
 export function Settings({ gamePath, root, cli, log, store, report, busy, canApply, onChooseRoot, onScan,
   cacheStatus, onIndexIcons, onChooseCli, onDiagnose, onForceApply, onRestore, onRecover }) {
-  const indexing = ['verificando', 'preparando', 'convertendo', 'salvando'].includes(cacheStatus.phase)
-  return <div className="settings-grid">
+  const indexing = isIndexingIcons(cacheStatus)
+  return <div className="settings-grid view-entry">
     <section className="panel setting">
       <h2>Instalação do Dota 2</h2>
       <p className="path">{gamePath || 'Pasta do Dota 2 não selecionada'}</p>

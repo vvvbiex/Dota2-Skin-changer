@@ -34,7 +34,7 @@ function indexIcons() {
   void requestIcons(session, 'index', [...images].filter(Boolean)).finally(() => { session.indexing = false })
 }
 const dataPath = name => path.join(app.getPath('userData'), name)
-const packFilters = [{ name: 'Pack de Skins (JSON)', extensions: ['json'] }]
+const packFilters = [{ name: 'Predefinição de cosméticos (JSON)', extensions: ['json'] }]
 function createIconWorker() {
   const worker = new Worker(new URL('./icon-worker.js', import.meta.url),
     { workerData: { root, cli, cache: dataPath('cache/icons') } })
@@ -172,25 +172,25 @@ function handlers() {
     },
     async exportPack(name, selections) {
       const pack = createPack(name, selections)
-      const filename = pack.name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '') || 'Pack de Skins'
+      const filename = pack.name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '') || 'Predefinição de cosméticos'
       const result = await dialog.showSaveDialog(window, {
-        title: 'Exportar Pack', defaultPath: filename + '.json', filters: packFilters,
+        title: 'Exportar predefinição', defaultPath: filename + '.json', filters: packFilters,
       })
       if (result.canceled) return false
-      if (!/\.json$/i.test(result.filePath)) throw Error('Use a extensão .json para salvar o pack.')
+      if (!/\.json$/i.test(result.filePath)) throw Error('Use a extensão .json para salvar a predefinição.')
       atomicWrite(result.filePath, JSON.stringify(pack, null, 2))
       return true
     },
     async importPack() {
       const result = await dialog.showOpenDialog(window, {
-        title: 'Importar Pack', filters: packFilters, properties: ['openFile'],
+        title: 'Importar predefinição', filters: packFilters, properties: ['openFile'],
       })
       if (result.canceled) return null
       const file = await fs.promises.open(result.filePaths[0], 'r')
       let pack
       try {
         const stat = await file.stat()
-        if (!stat.isFile() || stat.size > 4 * 1024 * 1024) throw Error('Arquivo de pack inválido ou maior que 4 MB.')
+        if (!stat.isFile() || stat.size > 4 * 1024 * 1024) throw Error('Arquivo de predefinição inválido ou maior que 4 MB.')
         pack = readPack(await file.readFile('utf8'))
       } finally { await file.close() }
       const data = settings()

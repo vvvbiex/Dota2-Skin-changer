@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { ItemArt, rarityKey, useIcons } from './ItemArt.jsx'
-import { attributes, compareGlobalSlots, fold, globalName, Icon, Portrait, Search, slotGlyph } from './ui.jsx'
+import { AttributeArt, ItemArt, rarityKey, useIcons } from './ItemArt.jsx'
+import { attributes, compareGlobalSlots, fold, globalName, Icon, isGlobalVisible, Portrait, Search, slotGlyph } from './ui.jsx'
 
 const views = [['all', 'Todos'], ['heroes', 'Heróis'], ['globals', 'Globais']]
 const filters = [['all', 'Todos'], ['changed', 'Alterados'], ['unchanged', 'Sem alterações']]
@@ -39,12 +39,13 @@ function GlobalCards({ slots, selected, onPick, busy }) {
       data-equipped={Boolean(equipped)} aria-haspopup="dialog" onClick={() => onPick(slot.id)} disabled={busy}>
       {cover && (icon?.url || !icon) ? <ItemArt item={cover} icon={icon}/> : <Icon name={slotGlyph(slot.id)} className="global-glyph"/>}
       {equipped && <span className="global-mark" title="Alterado"><Icon name="check"/></span>}
-      <span className="global-caption"><strong>{name}</strong><small>{slot.items.length} {slot.items.length === 1 ? 'item' : 'itens'}</small></span>
+      <span className="global-caption"><strong>{name}</strong><small>{slot.supported === false || !slot.items.length
+        ? 'Indisponível' : slot.items.length + (slot.items.length === 1 ? ' item' : ' itens')}</small></span>
     </button>
   })}</div>
 }
 
-export function Catalog({ catalog, choices, busy, cli, emptyGlobals, setEmptyGlobals, onHero, onGlobal, onChooseRoot }) {
+export function Catalog({ catalog, attributeIcons, choices, busy, cli, emptyGlobals, setEmptyGlobals, onHero, onGlobal, onChooseRoot }) {
   const [query, setQuery] = useState('')
   const [view, setView] = useState('all')
   const [heroFilter, setHeroFilter] = useState('all')
@@ -56,7 +57,7 @@ export function Catalog({ catalog, choices, busy, cli, emptyGlobals, setEmptyGlo
     const term = fold(query.trim())
     return {
       heroes: catalog?.heroes.filter(hero => fold(hero.name + ' ' + hero.id.replaceAll('_', ' ')).includes(term)) || [],
-      globals: catalog?.global.slots.filter(slot => (emptyGlobals || (slot.supported && slot.items.length)) &&
+      globals: catalog?.global.slots.filter(slot => isGlobalVisible(slot, emptyGlobals) &&
         fold(globalName(slot.id) + ' ' + slot.id.replaceAll('_', ' ')).includes(term))
         .sort(compareGlobalSlots) || [],
     }
@@ -74,13 +75,13 @@ export function Catalog({ catalog, choices, busy, cli, emptyGlobals, setEmptyGlo
       <Segments label="Seções do catálogo" className="catalog-segments" options={views}
         value={view} onChange={setView} counts={{ all: heroes.length + globals.length, heroes: heroes.length, globals: globals.length }}/>
     </div>
-    {view !== 'globals' && <section className="catalog-section" aria-label="Heróis">
+    {view !== 'globals' && <section className="catalog-section view-entry" aria-label="Heróis">
       <SectionControls title="Heróis" rows={heroes} changed={changedHeroes} filter={heroFilter} setFilter={setHeroFilter}/>
       <div className="hero-groups">{attributes.map(([attribute, label, color]) => {
         const group = visibleHeroes.filter(hero => hero.attribute === attribute)
         if (!group.length && attribute === 'Desconhecido') return null
         return <section className="hero-group" data-attribute={color} key={attribute}>
-          <h3><Icon name={color === 'unknown' ? 'diamond' : color}/>{label}<small>{group.length}</small></h3>
+          <h3><AttributeArt attribute={color} icon={attributeIcons.get(catalog.attributeIcons?.[color])}/>{label}<small>{group.length}</small></h3>
           <div className="portrait-grid">{group.map(hero => {
             const changed = changedHeroes.has(hero.id)
             return <button type="button" key={hero.id} className="hero-card" title={hero.name}
@@ -93,11 +94,11 @@ export function Catalog({ catalog, choices, busy, cli, emptyGlobals, setEmptyGlo
       })}</div>
       {!visibleHeroes.length && <p className="empty-message">Nenhum herói corresponde aos filtros.</p>}
     </section>}
-    {view !== 'heroes' && <section className="catalog-section" aria-label="Globais">
+    {view !== 'heroes' && <section className="catalog-section view-entry" aria-label="Globais">
       <div className="global-heading">
         <SectionControls title="Globais" rows={globals} changed={selectedGlobals} filter={globalFilter} setFilter={setGlobalFilter}/>
-        {catalog.global.slots.some(slot => !slot.supported || !slot.items.length) && <label className="checkbox-label">
-          <input type="checkbox" checked={emptyGlobals} onChange={event => setEmptyGlobals(event.target.checked)}/> Mostrar categorias vazias ou sem suporte
+        {catalog.global.slots.some(slot => !isGlobalVisible(slot, false)) && <label className="checkbox-label">
+          <input type="checkbox" checked={emptyGlobals} onChange={event => setEmptyGlobals(event.target.checked)}/> Mostrar categorias indisponíveis
         </label>}
       </div>
       <GlobalCards key={cli} slots={visibleGlobals} selected={selectedGlobals} onPick={onGlobal} busy={Boolean(busy)}/>

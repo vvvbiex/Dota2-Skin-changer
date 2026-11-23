@@ -1,14 +1,17 @@
 import React, { useMemo } from 'react'
-import { ItemArt, rarityKey, rarityNames, useIcons } from './ItemArt.jsx'
-import { attributes, Icon, Portrait, slotGlyph, slotName } from './ui.jsx'
+import { AttributeArt, DefaultArt, defaultImage, ItemArt, rarityKey, rarityNames, StyleOptions, useIcons } from './ItemArt.jsx'
+import { attributes, Icon, Portrait, slotName } from './ui.jsx'
 
-export function Hero({ hero, visibleSlots, selected, busy, showEmpty, onShowEmpty, onSlot, onStyle, onClear, onBack }) {
+export function Hero({ hero, attributeIcon, visibleSlots, selected, busy, showEmpty, onShowEmpty, onSlot, onStyle, onEquipSet, onClear, onBack }) {
   const [attribute, , color] = attributes.find(([name]) => name === hero.attribute) || attributes.at(-1)
   const slots = useMemo(() => visibleSlots.map(slot => {
     const choice = selected.get(slot.id)
     return { slot, choice, item: slot.items.find(item => item.id === String(choice?.itemId)) }
   }), [visibleSlots, selected])
-  const images = useMemo(() => slots.flatMap(({ item }) => item ? [item] : []), [slots])
+  const images = useMemo(() => [
+    ...slots.map(({ slot, item }) => item || { image: defaultImage(slot) }),
+    ...(hero.sets || []).map(set => ({ image: set.iconPath })),
+  ], [slots, hero.sets])
   const icons = useIcons(images)
   return <>
     <div className="breadcrumb-bar">
@@ -18,12 +21,12 @@ export function Hero({ hero, visibleSlots, selected, busy, showEmpty, onShowEmpt
       </div>
       <button type="button" className="back-button" onClick={onBack}><Icon name="back"/> Voltar</button>
     </div>
-    <section className="hero-heading" data-attribute={color} aria-labelledby="hero-title">
-      <div className="hero-attribute"><Icon name={color === 'unknown' ? 'diamond' : color}/>{attribute}</div>
+    <section className="hero-heading view-entry" data-attribute={color} aria-labelledby="hero-title">
+      <div className="hero-attribute"><AttributeArt attribute={color} icon={attributeIcon}/>{attribute}</div>
       <h2 id="hero-title">{hero.name}</h2>
       <Portrait key={hero.id} hero={hero} eager/>
       <button type="button" className="text-button" disabled={busy || !selected.size} onClick={onClear}>
-        <Icon name="reset"/> Limpar skins do herói
+        <Icon name="reset"/> Limpar cosméticos do herói
       </button>
     </section>
     <section className="gear-section" aria-labelledby="gear-title">
@@ -38,9 +41,9 @@ export function Hero({ hero, visibleSlots, selected, busy, showEmpty, onShowEmpt
         return <article className="slot-card" key={slot.id} data-equipped={Boolean(item)} data-rarity={rarity}>
           <button type="button" className="slot-button" aria-haspopup="dialog" aria-label={slotName(slot.id)}
             disabled={busy} onClick={() => onSlot(slot.id)}>
-            <span className="slot-title">{slot.id.replaceAll('_', ' ')}</span>
+            <span className="slot-title">{slotName(slot.id)}</span>
             <span className="slot-visual">
-              {item ? <ItemArt item={item} icon={icons.get(item.image)}/> : <Icon name={slotGlyph(slot.id)} className="slot-glyph"/>}
+              {item ? <ItemArt item={item} icon={icons.get(item.image)}/> : <DefaultArt slot={slot} icon={icons.get(defaultImage(slot))}/>}
               {item && <span className="equipped-check" title="Equipado"><Icon name="check"/></span>}
             </span>
             <span className="slot-caption">
@@ -49,14 +52,29 @@ export function Hero({ hero, visibleSlots, selected, busy, showEmpty, onShowEmpt
                 <small>{slot.items.length} {slot.items.length === 1 ? 'item' : 'itens'}</small>}
             </span>
           </button>
-          {item?.styles.length > 0 && <select aria-label={'Estilo de ' + item.name} disabled={busy}
-            value={choice.styleId ?? (item.styles.find(style => style.id === '0') || item.styles[0]).id}
-            onChange={event => onStyle(slot.id, item.id, event.target.value)}>
-            {item.styles.map(style => <option key={style.id} value={style.id}>{Number(style.id) + 1} · {style.name}</option>)}
-          </select>}
+          {item && <StyleOptions item={item} choice={choice} disabled={busy} onChange={styleId => onStyle(slot.id, item.id, styleId)}/>}
         </article>
       })}</div>
       {!slots.length && <p className="empty-message">Nenhum slot com itens disponíveis.</p>}
+    </section>
+    <section className="gear-section" aria-labelledby="sets-title">
+      <div className="section-bar gear-bar"><h2 id="sets-title">Conjuntos</h2></div>
+      {hero.sets?.length ? <div className="set-grid">{hero.sets.map(set => {
+        const pieces = new Map()
+        for (const { slot, itemId } of set.items) if (!pieces.has(slot)) pieces.set(slot, itemId)
+        const equipped = [...pieces].every(([slot, itemId]) => String(selected.get(slot)?.itemId) === itemId)
+        const rarity = rarityKey(set.rarity)
+        return <article key={set.id} className="set-card" data-rarity={rarity}>
+          <ItemArt item={{ name: set.name, image: set.iconPath }} icon={icons.get(set.iconPath)}/>
+          <div className="set-details">
+            <small className="rarity-text">{rarityNames[rarity]} · {pieces.size} {pieces.size === 1 ? 'peça' : 'peças'}</small>
+            <h3>{set.name}</h3>
+            <button type="button" disabled={busy || equipped} onClick={() => onEquipSet(set.id)}>
+              <Icon name={equipped ? 'check' : 'plus'}/>{equipped ? 'Conjunto equipado' : 'Equipar conjunto'}
+            </button>
+          </div>
+        </article>
+      })}</div> : <p className="empty-message">Nenhum conjunto disponível para este herói.</p>}
     </section>
   </>
 }
