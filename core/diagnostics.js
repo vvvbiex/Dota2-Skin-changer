@@ -3,6 +3,7 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { parseKV, children } from './kv1.js'
 import { openVpk, ITEMS_PATH } from './vpk.js'
+import { expectedSignatures, hasSignature, signaturesFile } from './signatures.js'
 
 export const sha = data => createHash('sha256').update(data).digest('hex')
 export const baseArchive = root => path.join(root, 'game/dota/pak01_dir.vpk')
@@ -132,6 +133,14 @@ export function diagnose(root) {
     const custom = rows.findIndex(n => n.kind === 'game' && n.dir === 'dota_custom')
     if (custom < 0 || custom > base) throw Error('gameinfo_branchspecific.gi define SearchPaths sem Game dota_custom acima de Game dota. O Dota ignora o mod. Reaplique.')
     return 'Game dota_custom acima de Game dota.'
+  })
+  check('dota.signatures', () => {
+    const file = signaturesFile(root)
+    if (!fs.existsSync(file)) return 'Arquivo ausente: sem verificação de assinaturas neste sistema.'
+    const text = fs.readFileSync(file, 'latin1')
+    const missing = expectedSignatures(root).filter(e => !hasSignature(text, e.line)).map(e => e.name)
+    if (missing.length) throw Error('dota.signatures não contém SHA1 e CRC32 atuais de ' + missing.join(', ') + '. O VAC pode bloquear partidas online. Reaplique com o Dota 2 fechado.')
+    return 'SHA1 e CRC32 de gameinfo.gi e gameinfo_branchspecific.gi conferem com dota.signatures.'
   })
   try { report.client = clientEvidence(root, receipt?.console) }
   catch (e) { report.client = 'Console indisponível para leitura: ' + e.message }

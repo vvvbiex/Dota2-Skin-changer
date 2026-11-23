@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { children, parseKV, scalar } from './kv1.js'
 import { buildItemsVpk } from './vpk.js'
+import { applySignatures, restoreSignatures } from './signatures.js'
 import { baseArchive, compareSchemas, consoleBaseline, readSchema, searchPaths } from './diagnostics.js'
 
 const ARCHIVE = 'pak01_dir.vpk'
@@ -232,7 +233,7 @@ export async function installModWithReport(root, patchedText, { originalSchema =
   const receipt = JSON.stringify({ app: 'dota-local-skins', source: digest(originalSchema), affected: validated.changed, console: baseline,
     hashes: [...new Set([prior, hash].filter(Boolean))] })
   const movedEntries = []
-  let preserved, created = false, receiptWritten = false, archiveWritten = false, branchWritten = false
+  let undoSignatures, preserved, created = false, receiptWritten = false, archiveWritten = false, branchWritten = false
   try {
     if (blocked) {
       const destination = files.dir + '.backup-' + randomUUID()
@@ -284,9 +285,11 @@ export async function installModWithReport(root, patchedText, { originalSchema =
     if (customAt < 0 || (baseAt >= 0 && customAt > baseAt)) {
       throw Error('gameinfo.gi: Game dota_custom não está acima de Game dota em SearchPaths.')
     }
+    undoSignatures = applySignatures(root)
   }
   catch (error) {
     try {
+      undoSignatures?.()
       if (branchWritten) await replaceFile(files.branch, branch.text)
       if (archiveWritten) {
         if (rollback) await replaceFile(files.archive, rollback)
@@ -331,5 +334,6 @@ export async function restoreGame(root, recoverBackup = false) {
   if (prior !== null) await clearMod(files)
   const branch = branchPlan(files, false)
   if (branch && branch.text !== branch.updated) await commitInfo(files.branch, branch.text, branch.updated)
+  restoreSignatures(root)
   return preserved
 }

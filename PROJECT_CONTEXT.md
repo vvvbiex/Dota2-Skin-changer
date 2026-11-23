@@ -84,3 +84,12 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - `package.json`: versão 1.3.0, `extraResources` (icons-pack.zip e Source2Viewer-CLI.exe + DLLs se existirem), `build/icon.ico` (16–256 px, gerado por `npm run make:icon` a partir de `src/dota-logo.png`) em `win.icon` e `nsis.installerIcon/uninstallerIcon`.
 - `release.yml`: antes do release baixa o CLI de `ValveResourceFormat/ValveResourceFormat` (asset `cli-windows-x64.zip`) para `tools/` e `icons-pack.zip` da release `icons-pack-v1` via `gh release download`. A release `icons-pack-v1` precisa ser criada manualmente com o zip.
 - Verificação: passaram 21 testes (novo teste de pacote/zip/fallback) e `build:renderer`. `build:exe` não foi executado.
+
+## Versão 1.3.1 · dota.signatures (Valve Antitrapaça)
+
+- Causa: gameinfo.gi e gameinfo_branchspecific.gi modificados não batiam com game/bin/win64/dota.signatures, e o VAC bloqueava partidas online.
+- Formato real confirmado (ASCII, CRLF): `...\..\..\dota\gameinfo_branchspecific.gi~SHA1:<40 HEX MAIÚSC>;CRC:<8 HEX MAIÚSC>`. Os dois gameinfo.gi e gameinfo_branchspecific.gi constam no original, antes do bloco DIGEST:. Instalações reais podem ter linhas extras após o DIGEST: (outro mod); elas são preservadas.
+- core/signatures.js: SHA1/CRC32 locais, pplySignatures (anexa as linhas atuais ao fim, só as que faltam; recibo dota.signatures.local-skins.json guarda as linhas do app, removidas antes de regravar, sem duplicar), backup dota.signatures.local-skins.bak (refeito só se a Valve atualizar o arquivo), estoreSignatures (remove as linhas do app, ou copia o backup sem recibo, e apaga backup/recibo) e ssertDotaClosed (tasklist dota2.exe).
+- install.js: assinaturas gravadas após os gameinfo (dentro da transação, com reversão em falha); estoreGame as restaura. electron/main.js bloqueia apply/restore/recover com o Dota 2 aberto. diagnostics.js ganhou o check dota.signatures. Configurações exibe o aviso.
+- Verificação: 22 testes passaram (
+pm test). uild:exe não foi executado; sem tag.

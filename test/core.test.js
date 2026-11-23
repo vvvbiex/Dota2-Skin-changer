@@ -13,6 +13,7 @@ import { compareSchemas, diagnose, sha } from '../core/diagnostics.js'
 import { createIconReader } from '../core/icons.js'
 import { writeZipStore, openZipStore } from '../core/zip.js'
 import { createPack, readPack } from '../core/packs.js'
+import { fileSignature, signaturesFile, signaturesBackup } from '../core/signatures.js'
 import { equipSet } from '../core/selections.js'
 
 const hero = 'npc_dota_hero_earthshaker'
@@ -284,6 +285,30 @@ test('monta dota_custom também em gameinfo_branchspecific.gi quando ele define 
   assert.equal(fs.readFileSync(branch, 'utf8'), text)
 })
 
+test('dota.signatures: SHA1/CRC32, escrita sem duplicar, diagnóstico e restauração do backup', async t => {
+  const known = fileSignature('abc')
+  assert.deepEqual(known, { sha1: 'A9993E364706816ABA3E25717850C26C9CD0D89D', crc: '352441C2' })
+  const root = fakeInstall(t)
+  const sigs = signaturesFile(root)
+  fs.mkdirSync(path.dirname(sigs), { recursive: true })
+  const original = '...\\..\\..\\dota\\gameinfo.gi~SHA1:' + 'A'.repeat(40) + ';CRC:00000000\r\n' +
+    '...\\Qt5Core.dll~SHA1:' + 'B'.repeat(40) + ';CRC:11111111\r\nDIGEST:ABCDEF\r\n'
+  fs.writeFileSync(sigs, original, 'latin1')
+  const patched = patchItemsGame(loadGame(root), [selection])
+  assert.equal(diagnose(root).checks.find(c => c.label === 'dota.signatures').ok, false)
+  await installMod(root, patched)
+  await installMod(root, patched)
+  const info = path.join(root, 'game/dota/gameinfo.gi')
+  const line = '...\\..\\..\\dota\\gameinfo.gi~SHA1:' + fileSignature(fs.readFileSync(info)).sha1 + ';CRC:' + fileSignature(fs.readFileSync(info)).crc
+  const text = fs.readFileSync(sigs, 'latin1')
+  assert.equal(text.split(line).length - 1, 1)
+  assert.equal(text.split('gameinfo.gi~').length - 1, 2)
+  assert.equal(diagnose(root).checks.find(c => c.label === 'dota.signatures').ok, true)
+  assert.equal(fs.readFileSync(signaturesBackup(root), 'latin1'), original)
+  await restoreGame(root)
+  assert.equal(fs.readFileSync(sigs, 'latin1'), original)
+  assert.equal(fs.existsSync(signaturesBackup(root)), false)
+})
 test('protege VPK alterado na restauração e montagem de terceiros', async t => {
   const root = fakeInstall(t)
   assert.throws(() => editGameInfo(originalInfo.replace('\tGame core', '\tGame dota_custom\r\n\tGame core'), true), /outra configuração/)

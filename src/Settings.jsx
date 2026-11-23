@@ -48,6 +48,7 @@ export function Settings({ gamePath, root, cli, bundledCli, log, store, report, 
     </section>
     <section className="panel setting">
       <h2>Restaurar jogo</h2>
+      <p className="muted">O ajuste de dota.signatures é aplicado automaticamente para compatibilidade com partidas online e removido ao restaurar o jogo original. Feche o Dota 2 antes de aplicar ou restaurar.</p>
       <button type="button" disabled={busy || !root} onClick={onRestore}>Restaurar gameinfo.gi e limpar mods</button>
     </section>
     <section className="panel setting">

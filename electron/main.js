@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { Worker } from 'node:worker_threads'
 import { atomicWrite, detectDota } from '../core/install.js'
 import { createPack, readPack } from '../core/packs.js'
+import { assertDotaClosed } from '../core/signatures.js'
 import { equipSet } from '../core/selections.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -99,6 +100,7 @@ function save(data) {
 }
 async function run(action, selections, force) {
   if (busy || !root) throw Error('Selecione a instalação e aguarde a operação atual.')
+  if (['apply', 'restore', 'recover'].includes(action)) assertDotaClosed()
   busy = true
   try {
     return await new Promise((resolve, reject) => {
