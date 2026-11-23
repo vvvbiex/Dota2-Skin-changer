@@ -231,13 +231,29 @@ export async function installModWithReport(root, patchedText, { originalSchema =
     }
     await replaceFile(files.receipt, receipt)
     receiptWritten = true
-    if (prior !== hash) {
+    const startedAt = Date.now() - 2000
+    const before = exists(files.archive)
+    {
       await replaceFile(files.archive, data)
       archiveWritten = true
     }
+    const after = fs.statSync(files.archive)
+    if (after.size !== data.length || digest(fs.readFileSync(files.archive)) !== hash) {
+      throw Error('pak01_dir.vpk não foi substituído: tamanho ou hash divergem do pacote gerado.')
+    }
+    if (after.mtimeMs < startedAt || (before && after.mtimeMs < before.mtimeMs)) {
+      throw Error('pak01_dir.vpk não foi atualizado: a data de modificação permaneceu antiga.')
+    }
     if (readSchema(files.archive) !== patchedText) throw Error('O conteúdo relido do VPK diverge do patch.')
     await commitInfo(files.info, original, updated)
-    if (fs.readFileSync(files.info, 'utf8') !== updated) throw Error('gameinfo.gi mudou após a gravação.')
+    const written = fs.readFileSync(files.info, 'utf8')
+    if (written !== updated) throw Error('gameinfo.gi mudou após a gravação.')
+    const order = searchPaths(written)
+    const customAt = order.findIndex(n => n.kind === 'game' && n.dir === 'dota_custom')
+    const baseAt = order.findIndex(n => n.kind === 'game' && n.dir === 'dota' && !n.condition)
+    if (customAt < 0 || (baseAt >= 0 && customAt > baseAt)) {
+      throw Error('gameinfo.gi: Game dota_custom não está acima de Game dota em SearchPaths.')
+    }
   }
   catch (error) {
     try {

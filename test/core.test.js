@@ -253,6 +253,23 @@ test('aplica, reaplica e restaura em presença de atualização da Valve', async
   assert.equal(fs.existsSync(mod), false)
 })
 
+test('substitui um pak01_dir.vpk antigo mesmo com conteúdo idêntico e atualiza o timestamp', async t => {
+  const root = fakeInstall(t)
+  const patched = patchItemsGame(loadGame(root), [selection])
+  const file = await installMod(root, patched)
+  const old = new Date(Date.now() - 3600_000)
+  fs.utimesSync(file, old, old)
+  await installMod(root, patched)
+  assert.ok(fs.statSync(file).mtimeMs > old.getTime() + 60_000)
+  const other = patchItemsGame(loadGame(root), [selection, { hero: 'global', slot: 'weather', itemId: '6' }])
+  fs.utimesSync(file, old, old)
+  const size = fs.statSync(file).size
+  await installMod(root, other)
+  assert.equal(openVpk(file).read(ITEMS_PATH).toString(), other)
+  assert.notEqual(fs.statSync(file).size, size)
+  assert.ok(fs.statSync(file).mtimeMs > old.getTime() + 60_000)
+})
+
 test('protege VPK alterado na restauração e montagem de terceiros', async t => {
   const root = fakeInstall(t)
   assert.throws(() => editGameInfo(originalInfo.replace('\tGame core', '\tGame dota_custom\r\n\tGame core'), true), /outra configuração/)

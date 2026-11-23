@@ -66,3 +66,10 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 3. Confira `game/dota_custom/pak01_dir.vpk` e seu recibo. O relatório deve mostrar CRC e SHA válidos, `scripts/items/items_game.txt`, tamanhos, seções e IDs esperados. Se o esquema original mudou após um update, reaplique. O CLI do VRF também verifica o pacote com `-i caminho/do/pak01_dir.vpk --vpk_verify`.
 4. Para investigar no cliente, habilite o console do Dota e a opção de inicialização `-condebug` na Steam. Após aplicar, reinicie o jogo, execute `path` no console e repita a verificação. O app procura evidência de montagem no trecho novo de `game/dota/console.log`. Sem evidência, o uso pelo cliente permanece indeterminado. O relatório em disco, sozinho, não comprova renderização.
 5. Teste com o item padrão equipado no slot escolhido no modo de demonstração. Para comparar com o jogo original, use **Restaurar gameinfo.gi e limpar mods** e reinicie. Em caso de GI ausente ou inválido, use **Configurações → Recuperar gameinfo.gi do backup**.
+
+## Versão 1.2.0 e regras fixas de workflow
+
+- Versão atual: 1.2.0, com instalador NSIS `Dota-2-Local-Skin-Changer-Setup.exe`.
+- NÃO rodar `npm run build:exe` automaticamente no chat: o usuário testa em modo dev e gera o build manualmente no PowerShell.
+- Após cada alteração validada com `npm test`: atualizar este arquivo, commit em português e `git push origin main`.
+- Correção pós-1.2.0: `installModWithReport` pulava a regravação do `pak01_dir.vpk` quando o hash coincidia com o anterior (só o recibo era atualizado). Agora sempre regrava e, após a escrita, confere tamanho, hash e mtime (e o conteúdo relido); também confere que `Game dota_custom` está acima de `Game dota` no `gameinfo.gi`. Qualquer falha reverte e propaga o erro real. `Aplicar e Jogar` só abre a Steam após `api.apply` retornar `ok`. Teste novo em `test/core.test.js` com VPK antigo. Passaram 19 testes.
