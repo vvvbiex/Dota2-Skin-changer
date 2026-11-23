@@ -87,11 +87,9 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 
 ## Versão 1.3.1 · dota.signatures (Valve Antitrapaça)
 
-- Causa: gameinfo.gi e gameinfo_branchspecific.gi modificados não batiam com game/bin/win64/dota.signatures, e o VAC bloqueava partidas online.
-- Formato real confirmado (ASCII, CRLF): `...\..\..\dota\gameinfo_branchspecific.gi~SHA1:<40 HEX MAIÚSC>;CRC:<8 HEX MAIÚSC>`. Os dois gameinfo.gi e gameinfo_branchspecific.gi constam no original, antes do bloco DIGEST:. Instalações reais podem ter linhas extras após o DIGEST: (outro mod); elas são preservadas.
-- core/signatures.js: SHA1/CRC32 locais, pplySignatures (anexa as linhas atuais ao fim, só as que faltam; recibo dota.signatures.local-skins.json guarda as linhas do app, removidas antes de regravar, sem duplicar), backup dota.signatures.local-skins.bak (refeito só se a Valve atualizar o arquivo), estoreSignatures (remove as linhas do app, ou copia o backup sem recibo, e apaga backup/recibo) e ssertDotaClosed (tasklist dota2.exe).
-- install.js: assinaturas gravadas após os gameinfo (dentro da transação, com reversão em falha); estoreGame as restaura. electron/main.js bloqueia apply/restore/recover com o Dota 2 aberto. diagnostics.js ganhou o check dota.signatures. Configurações exibe o aviso.
-- Verificação: 22 testes passaram (
-pm test). uild:exe não foi executado; sem tag.
-
-- Correção: o CRC de dota.signatures usa bytes invertidos (little-endian). O CRC32 padrão 84F7897B do gameinfo_branchspecific.gi original vira 7B89F784 no arquivo. Validado contra a linha original da Valve. A primeira versão gravava o CRC sem inverter, e por isso o VAC continuava bloqueando. Não usar o FixMatchMaking.bat de terceiros: ele baixa um gameinfo_branchspecific.gi externo e cria a pasta Dota2SkinChanger.
+- Causa: `gameinfo.gi` e `gameinfo_branchspecific.gi` modificados não batiam com `game/bin/win64/dota.signatures`, e o VAC bloqueava partidas online.
+- Formato real confirmado (ASCII, CRLF): `...\..\..\dota\gameinfo_branchspecific.gi~SHA1:<40 HEX MAIÚSC>;CRC:<8 HEX MAIÚSC>`. Os dois (`gameinfo.gi` e `gameinfo_branchspecific.gi`) constam no original, antes do bloco `DIGEST:`. Instalações reais podem ter linhas extras após o `DIGEST:` (outro mod); elas são preservadas.
+- `core/signatures.js`: SHA1/CRC32 locais (CRC32 com bytes invertidos / little-endian, ex.: `84F7897B` → `7B89F784`, validado contra a linha original da Valve), `applySignatures` (anexa as linhas atuais ao fim, só as que faltam; recibo `dota.signatures.local-skins.json` guarda as linhas do app, removidas antes de regravar, sem duplicar), backup `dota.signatures.local-skins.bak` (refeito só se a Valve atualizar o arquivo), `restoreSignatures` (remove as linhas do app, ou copia o backup sem recibo, e apaga backup/recibo) e `assertDotaClosed` (`tasklist` `dota2.exe`).
+- `install.js`: assinaturas gravadas após os `gameinfo` (dentro da transação, com reversão em falha); `restoreGame` as restaura. `electron/main.js` bloqueia apply/restore/recover com o Dota 2 aberto. `diagnostics.js` ganhou o check `dota.signatures`. Configurações exibe o aviso.
+- Não usar o `FixMatchMaking.bat` de terceiros: ele baixa um `gameinfo_branchspecific.gi` externo e cria a pasta `Dota2SkinChanger`.
+- Verificação e publicação: 22 testes passaram (`npm test`), `npm run build:exe` gerou `Dota-2-Local-Skin-Changer-Setup.exe`, o usuário confirmou no jogo que o bloqueio do VAC foi resolvido e a tag `v1.3.1` foi enviada ao GitHub para disparar a Release privada.
