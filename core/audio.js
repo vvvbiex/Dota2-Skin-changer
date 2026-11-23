@@ -199,18 +199,28 @@ function extractChatwheelPrefix(cw, dir) {
 
 export function createAudioReader(root) {
   const archive = baseArchive(root)
-  let pack, stamp, voByDir, musicByDir
+  let pack, stamp, voByDir, musicByDir, tauntByDir
 
   function ensureIndex() {
     const stat = fs.statSync(archive)
     const key = stat.size + ':' + stat.mtimeMs
     if (key === stamp && pack) return
-    pack = openVpk(archive, p => p.endsWith('.vsnd_c') && (p.startsWith('sounds/vo/') || p.startsWith('sounds/music/')))
+    pack = openVpk(archive, p => p.endsWith('.vsnd_c') && (
+      p.startsWith('sounds/vo/') || p.startsWith('sounds/music/') ||
+      (p.startsWith('sounds/weapons/hero/') && p.includes('taunt'))
+    ))
     voByDir = new Map()
     musicByDir = new Map()
+    tauntByDir = new Map()
     for (const p of pack.paths()) {
       const parts = p.split('/')
       if (parts.length < 4) continue
+      if (parts[1] === 'weapons' && parts[2] === 'hero' && parts.length >= 5) {
+        const dir = parts[3]
+        if (!tauntByDir.has(dir)) tauntByDir.set(dir, [])
+        tauntByDir.get(dir).push(p)
+        continue
+      }
       const dir = parts[2]
       const target = parts[1] === 'music' ? musicByDir : voByDir
       if (!target.has(dir)) target.set(dir, [])
@@ -265,6 +275,17 @@ export function createAudioReader(root) {
       return pickDiverse(voByDir.get(meta.folder) || [], 4)
     }
 
+    if (meta.kind === 'taunt' && meta.heroId) {
+      const short = meta.heroId.replace(/^npc_dota_hero_/, '').toLowerCase()
+      const voDir = HERO_VO_DIR[short] || (voByDir.has(short) ? short : short.replace(/_/g, ''))
+      const sfx = tauntByDir.get(short) || tauntByDir.get(voDir) || tauntByDir.get(short.replace(/_/g, '')) || []
+      const vo = (voByDir.get(voDir) || []).filter(p => /taunt/i.test(p.split('/').pop()))
+      const picked = []
+      for (const entry of sfx.slice(0, 2)) picked.push({ entry, label: 'Som da provocação', caption: meta.englishName || '' })
+      for (const entry of vo.slice(0, 4 - picked.length)) picked.push({ entry, label: 'Fala da provocação', caption: '' })
+      return picked
+    }
+
     if (meta.kind === 'voice' && meta.heroId) {
       const short = meta.heroId.replace(/^npc_dota_hero_/, '').toLowerCase()
       const dir = HERO_VO_DIR[short] || (voByDir.has(short) ? short : short.replace(/_/g, ''))
@@ -297,7 +318,7 @@ export function createAudioReader(root) {
 
   function decodeEntry(entry) {
     ensureIndex()
-    if (typeof entry !== 'string' || !/^sounds\/(?:vo|music)\/[\w./ -]+\.vsnd_c$/i.test(entry) || entry.includes('..')) {
+    if (typeof entry !== 'string' || !/^sounds\/(?:vo|music|weapons\/hero)\/[\w./ -]+\.vsnd_c$/i.test(entry) || entry.includes('..')) {
       throw Error('Caminho de áudio inválido.')
     }
     if (!pack.has(entry)) throw Error('Arquivo de áudio não encontrado no VPK.')

@@ -14,6 +14,7 @@ import { createIconReader } from '../core/icons.js'
 import { writeZipStore, openZipStore } from '../core/zip.js'
 import { createPack, readPack } from '../core/packs.js'
 import { decodeVsnd, createAudioReader } from '../core/audio.js'
+import { createTauntVideoReader } from '../core/taunts.js'
 import { fileSignature, signaturesFile, signaturesBackup } from '../core/signatures.js'
 import { equipSet } from '../core/selections.js'
 
@@ -523,4 +524,60 @@ test('áudio: decodifica .vsnd_c MP3 e PCM16 para WAV e resolve prévias de locu
   assert.equal(preview.tracks.length, 1)
   assert.equal(preview.tracks[0].caption, 'Primeiro sangue!')
   assert.ok(preview.initial.url.startsWith('data:audio/mpeg;base64,'))
+})
+
+test('provocações: busca vídeo WebM na Dota 2 Wiki, valida origem/magic bytes e reutiliza cache local', async t => {
+  const schema = '"items_game" { items { ' +
+    '7 { item_slot taunt baseitem 1 used_by_heroes { all 1 } } ' +
+    '8 { item_slot taunt item_name "#T_JUGGLE" name "Taunt: The Master Juggles" used_by_heroes { npc_dota_hero_invoker 1 } } ' +
+    '} }'
+  const parsed = parseItemsGame(schema, {
+    tokens: new Map([['t_juggle', 'Provocação: Mestre do Malabarismo']]),
+    englishTokens: new Map([['t_juggle', 'Taunt: The Master Juggles']]),
+  })
+  const tauntItem = parsed.catalog.heroes[0].slots.find(s => s.id === 'taunt').items[0]
+  assert.equal(tauntItem.name, 'Provocação: Mestre do Malabarismo')
+  assert.equal(tauntItem.audio.kind, 'taunt')
+  assert.equal(tauntItem.audio.englishName, 'Taunt: The Master Juggles')
+
+  const cache = path.join(scratch(t), 'taunts')
+  const fakeWebm = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01])
+  let calls = 0
+  const reader = createTauntVideoReader(cache, {
+    async fetchImpl(url) {
+      calls++
+      if (url.includes('action=parse')) {
+        return { ok: true, async json() { return { parse: { wikitext: { '*': '[[File:Taunt The Master Juggles.webm|class=autoloop]]' } } } } }
+      }
+      if (url.includes('prop=imageinfo')) {
+        return { ok: true, async json() { return { query: { pages: { 1: { imageinfo: [{ url: 'https://liquipedia.net/commons/images/3/3d/Taunt_The_Master_Juggles.webm', size: fakeWebm.length }] } } } } } }
+      }
+      if (url.startsWith('https://liquipedia.net/commons/')) {
+        return { ok: true, async arrayBuffer() { return fakeWebm } }
+      }
+      throw Error('URL inesperada: ' + url)
+    },
+  })
+  const first = await reader.getVideo(tauntItem.audio)
+  assert.equal(first.kind, 'video')
+  assert.equal(first.mime, 'video/webm')
+  assert.equal(first.cached, false)
+  assert.ok(first.url.startsWith('data:video/webm;base64,'))
+  assert.equal(calls, 3)
+
+  const second = await reader.getVideo(tauntItem.audio)
+  assert.equal(second.cached, true)
+  assert.equal(second.url, first.url)
+  assert.equal(calls, 3)
+
+  // Rejeita mídia hospedada em domínio não autorizado
+  const badReader = createTauntVideoReader(path.join(scratch(t), 'taunts-bad'), {
+    async fetchImpl(url) {
+      if (url.includes('action=parse')) return { ok: true, async json() { return { parse: { wikitext: { '*': '[[File:X.webm]]' } } } } }
+      return { ok: true, async json() { return { query: { pages: { 1: { imageinfo: [{ url: 'https://evil.example/X.webm', size: 100 }] } } } } } }
+    },
+  })
+  const blocked = await badReader.getVideo({ englishName: 'Taunt: Evil' })
+  assert.equal(blocked.url, null)
+  assert.match(blocked.reason, /não autorizada/)
 })

@@ -862,6 +862,72 @@ dialog.picker-panel .nlm-dock { bottom: 20px; }
 }
 .nlm-time strong { color: var(--ink); font-weight: 650; }
 
+/* Card flutuante Apple Glass para vídeo de provocação */
+.taunt-dock {
+  position: fixed;
+  right: 22px;
+  bottom: 54px;
+  z-index: 52;
+  width: min(368px, calc(100vw - 28px));
+  padding: 14px 15px 15px;
+  border-radius: 24px;
+  background: rgba(5, 5, 7, .94);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, .1);
+  box-shadow: 0 28px 64px -16px rgba(0, 0, 0, .95), 0 1px 0 rgba(255, 255, 255, .07) inset;
+  backdrop-filter: blur(30px) saturate(1.6);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  user-select: none;
+}
+dialog.picker-panel .taunt-dock { bottom: 20px; right: 20px; }
+[data-theme="light"] .taunt-dock {
+  background: rgba(255, 255, 255, .95);
+  color: #141416;
+  border-color: rgba(20, 20, 24, .1);
+  box-shadow: 0 22px 54px -14px rgba(20, 20, 30, .24), 0 1px 0 #ffffff inset;
+}
+.taunt-stage {
+  position: relative;
+  margin-top: 12px;
+  border-radius: 16px;
+  overflow: hidden;
+  min-height: 210px;
+  max-height: 310px;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 42%, #181316, #040406 76%);
+  border: 1px solid rgba(255, 255, 255, .08);
+}
+[data-theme="light"] .taunt-stage {
+  background: radial-gradient(circle at 50% 42%, #f1f1f5, #e2e2e8 76%);
+  border-color: rgba(20, 20, 24, .08);
+}
+.taunt-media {
+  display: block;
+  width: 100%;
+  max-height: 308px;
+  object-fit: contain;
+  cursor: pointer;
+  animation: blur-reveal .4s var(--ease-out) both;
+}
+.taunt-loading {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 28px 16px;
+}
+.taunt-spinner {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 59, 48, .22);
+  border-top-color: var(--accent);
+  animation: taunt-spin .75s linear infinite;
+}
+@keyframes taunt-spin { to { transform: rotate(360deg); } }
+
 /* Entrada com blur (Wabi) e sheet com mola (Plasma) */
 .view-entry { animation: blur-reveal .55s var(--ease-out) both; }
 @keyframes blur-reveal { from { opacity: 0; filter: blur(10px); transform: translateY(10px) scale(.992); } }

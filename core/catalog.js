@@ -28,8 +28,8 @@ function inherit(own, base) {
   return result
 }
 
-function extractAudioMeta(visuals, slotId, heroIds, translate) {
-  if (!visuals.length) return null
+function extractAudioMeta(visuals, slotId, heroIds, translate, englishName, isDefault) {
+  const isTaunt = !isDefault && /^taunt(?:_persona_\d+)?$/.test(slotId || '') && heroIds.length === 1
   const clips = [], chatwheel = [], criteria = []
   let folder = null, musicPrefix = null
   for (const node of visuals) {
@@ -54,6 +54,7 @@ function extractAudioMeta(visuals, slotId, heroIds, translate) {
       criteria.push(asset.toLowerCase())
     }
   }
+  if (isTaunt) return { kind: 'taunt', heroId: heroIds[0], englishName, clips, chatwheel, criteria }
   if (slotId === 'music' && musicPrefix) return { kind: 'music', musicPrefix }
   if ((slotId === 'announcer' || slotId === 'mega_kills') && (clips.length || folder)) {
     return { kind: slotId, clips, folder }
@@ -65,7 +66,7 @@ function extractAudioMeta(visuals, slotId, heroIds, translate) {
   return null
 }
 
-export function parseItemsGame(text, { heroDefinitions = [], tokens = new Map() } = {}) {
+export function parseItemsGame(text, { heroDefinitions = [], tokens = new Map(), englishTokens = tokens } = {}) {
   const document = parseKV(text)
   const root = children(find(document, 'items_game'))
   const items = children(find(root, 'items'))
@@ -144,9 +145,12 @@ export function parseItemsGame(text, { heroDefinitions = [], tokens = new Map() 
       const name = scalar(children(n), 'name')
       return { id: n.key, name: translate(name, name && !name.startsWith('#') ? name : 'Estilo ' + (Number(n.key) + 1)) }
     })
-    const audio = extractAudioMeta(visuals, slotId, heroIds, translate)
+    const rawItemName = scalar(fields, 'item_name')
+    const fallbackName = scalar(fields, 'name') || id
+    const englishName = englishTokens.get(rawItemName?.replace(/^#/, '').toLowerCase()) || fallbackName
+    const audio = extractAudioMeta(visuals, slotId, heroIds, translate, englishName, isDefault)
     const item = {
-      id, name: translate(scalar(fields, 'item_name'), scalar(fields, 'name') || id),
+      id, name: translate(rawItemName, fallbackName),
       rarity: scalar(fields, 'item_rarity') || 'common', image: scalar(fields, 'image_inventory') || null, styles,
       ...(audio ? { audio } : {}),
     }
@@ -231,14 +235,19 @@ export function loadGame(root) {
     heroDefinitions.push(...children(find(defs, 'DOTAHeroes')))
   }
   const tokens = new Map()
+  const englishTokens = new Map()
   for (const lang of ['english', 'brazilian']) {
     for (const group of ['items', 'dota']) {
       const p = 'resource/localization/' + group + '_' + lang + '.txt'
       if (!pack.has(p)) continue
       for (const node of children(find(children(parseKV(read(p))[0]), 'Tokens'))) {
-        if (typeof node.value === 'string') tokens.set(node.key.toLowerCase(), node.value)
+        if (typeof node.value === 'string') {
+          const k = node.key.toLowerCase()
+          tokens.set(k, node.value)
+          if (lang === 'english') englishTokens.set(k, node.value)
+        }
       }
     }
   }
-  return parseItemsGame(read(ITEMS_PATH), { heroDefinitions, tokens })
+  return parseItemsGame(read(ITEMS_PATH), { heroDefinitions, tokens, englishTokens })
 }

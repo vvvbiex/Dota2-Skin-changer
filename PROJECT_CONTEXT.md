@@ -121,3 +121,12 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - Validação completa pelo usuário no aplicativo: visual Apple Glass (modo escuro OLED preto + modo claro), navegação segmentada no topo, carregamento estilo Gemini Image Studio e prévia de áudio estilo NotebookLM tocando perfeitamente via Web Audio API.
 - `npm test` passou (23/23 testes) e `npm run build:exe` gerou o instalador NSIS `Dota-2-Local-Skin-Changer-Setup.exe` na raiz.
 - Commit enviado para `main` e tag `v1.4.0` publicada no GitHub para disparar a Release privada.
+
+## Prévia de vídeo (e áudio local) para provocações (pós-1.4.0)
+
+- `core/taunts.js`: `createTauntVideoReader` consulta a API pública do MediaWiki da Liquipedia Dota 2 Wiki (`https://liquipedia.net/dota2/api.php`, sucessora oficial da antiga Wiki no Fandom — o CDN `static.wikia.nocookie.net` retornava HTTP 403/Cloudflare em requisições diretas) usando o nome original em inglês da provocação (`items_english.txt`), resolve o arquivo `.webm`/`.mp4`/`.gif`, valida origem (`https://liquipedia.net`), limite de 16 MB e magic bytes, e salva em cache local (`userData/cache/taunts/`).
+- `core/catalog.js`: mantém `englishTokens` em `loadGame` e marca itens de `taunt` / `taunt_persona_*` com `audio: { kind: 'taunt', heroId, englishName }`.
+- `core/audio.js`: passa a indexar também `sounds/weapons/hero/*taunt*.vsnd_c` e falas `taunt` em `sounds/vo/`, garantindo fallback local automático para o player NotebookLM quando não houver vídeo ou o usuário estiver offline (além do botão "Ouvir áudio local do VPK" dentro do próprio card de vídeo).
+- IPC (`electron/main.js`, `electron/preload.cjs`): `tauntPreview(meta)`.
+- UI (`src/MotionUI.jsx`, `src/glass.css`): botões de provocação exibem **Vídeo**; `TauntVideoDock` abre um card flutuante Apple Glass (também no Top Layer dentro do `<dialog>` do `ItemPicker`) com loop automático, play/pause, mudo e troca para o áudio do VPK.
+- Verificação: smoke test real na Liquipedia baixou `Taunt_The_Master_Juggles.webm` (`video/webm`, ~1,5 MB) e confirmou reuso do cache na 2ª leitura; `npm run build:renderer` e `npm test` (24 testes) passaram. `build:exe` não executado; sem tag.

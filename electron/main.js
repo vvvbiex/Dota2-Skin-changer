@@ -8,12 +8,13 @@ import { createPack, readPack } from '../core/packs.js'
 import { assertDotaClosed } from '../core/signatures.js'
 import { equipSet } from '../core/selections.js'
 import { createAudioReader } from '../core/audio.js'
+import { createTauntVideoReader } from '../core/taunts.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 let root
 let busy = false
 let window
-let cli, iconSession, catalog, audioReader
+let cli, iconSession, catalog, audioReader, tauntReader
 const bundledFile = name => app.isPackaged ? path.join(process.resourcesPath, name)
   : path.join(here, '..', name === 'icons-pack.zip' ? 'assets' : 'tools', name)
 const packPath = () => { const file = bundledFile('icons-pack.zip'); return fs.existsSync(file) ? file : '' }
@@ -169,6 +170,10 @@ function handlers() {
       if (!root) throw Error('Pasta do Dota 2 não selecionada.')
       audioReader ??= createAudioReader(root)
       return audioReader.track(entry)
+    },
+    tauntPreview: meta => {
+      tauntReader ??= createTauntVideoReader(dataPath('cache/taunts'))
+      return tauntReader.getVideo(meta)
     },
     play: () => shell.openExternal('steam://rungameid/570'),
     async scan() {

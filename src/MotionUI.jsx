@@ -260,6 +260,7 @@ const KIND_LABEL = {
   announcer: 'Locutor',
   mega_kills: 'Locutor de matanças',
   voice: 'Voz personalizada',
+  taunt: 'Provocação',
 }
 const formatTime = sec => {
   const s = Math.max(0, Math.floor(Number.isFinite(sec) ? sec : 0))
@@ -285,6 +286,7 @@ function dataUrlToArrayBuffer(url) {
 
 export function useAudioPreview(api) {
   const [state, setState] = useState(null)
+  const [video, setVideo] = useState(null)
   const ctxRef = useRef(null)
   const analyserRef = useRef(null)
   const gainRef = useRef(null)
@@ -294,8 +296,11 @@ export function useAudioPreview(api) {
   const startedAtRef = useRef(0)
   const cacheRef = useRef(new Map())
   const reqRef = useRef(0)
+  const videoReqRef = useRef(0)
   const stateRef = useRef(null)
+  const videoRef = useRef(null)
   stateRef.current = state
+  videoRef.current = video
 
   const ensureContext = useCallback(async () => {
     if (!ctxRef.current) {
@@ -415,8 +420,10 @@ export function useAudioPreview(api) {
     ctxRef.current?.close().catch(() => {})
   }, [stopSource])
 
-  const open = useCallback(async (item, iconUrl = null) => {
+  const openAudio = useCallback(async (item, iconUrl = null) => {
     if (!api?.audioPreview || !item?.audio) return
+    videoReqRef.current++
+    setVideo(null)
     const cur = stateRef.current
     if (cur && cur.itemId === item.id && !cur.error && !cur.loading) {
       if (cur.playing) {
@@ -478,6 +485,46 @@ export function useAudioPreview(api) {
     }
   }, [api, decodeTrack, ensureContext, handleEnded, startBuffer, stopSource])
 
+  const openVideo = useCallback(async (item, iconUrl = null) => {
+    if (!api?.tauntPreview || !item?.audio) return openAudio(item, iconUrl)
+    if (videoRef.current?.itemId === item.id) {
+      videoReqRef.current++
+      setVideo(null)
+      return
+    }
+    reqRef.current++
+    stopSource()
+    bufferRef.current = null
+    setState(null)
+    const reqId = ++videoReqRef.current
+    setVideo({ item, itemId: item.id, name: item.name, iconUrl, loading: true, url: null, kind: 'video', cached: false, error: '' })
+    try {
+      const res = await api.tauntPreview({ id: item.id, englishName: item.audio.englishName, name: item.name })
+      if (videoReqRef.current !== reqId) return
+      if (res?.url) {
+        setVideo(prev => prev ? { ...prev, loading: false, url: res.url, kind: res.kind || 'video', cached: Boolean(res.cached), error: '' } : prev)
+        return
+      }
+      // Fallback automático para o áudio local do VPK se o vídeo não existir na Wiki ou estiver offline
+      setVideo(null)
+      await openAudio(item, iconUrl)
+    } catch {
+      if (videoReqRef.current !== reqId) return
+      setVideo(null)
+      await openAudio(item, iconUrl)
+    }
+  }, [api, openAudio, stopSource])
+
+  const open = useCallback((item, iconUrl = null) => {
+    if (item?.audio?.kind === 'taunt' && api?.tauntPreview) return openVideo(item, iconUrl)
+    return openAudio(item, iconUrl)
+  }, [api, openAudio, openVideo])
+
+  const closeVideo = useCallback(() => {
+    videoReqRef.current++
+    setVideo(null)
+  }, [])
+
   const togglePlay = useCallback(async () => {
     const cur = stateRef.current
     if (!cur || cur.loading || !bufferRef.current) return
@@ -515,21 +562,104 @@ export function useAudioPreview(api) {
     setState(null)
   }, [stopSource])
 
-  return { state, analyserRef, open, togglePlay, selectTrack, seek, close }
+  return { state, video, analyserRef, open, openAudio, togglePlay, selectTrack, seek, close, closeVideo }
+}
+
+function VideoMark({ size = 13 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" style={{ flex: 'none' }}>
+    <rect x="2.5" y="5" width="14" height="14" rx="3"/>
+    <path d="M16.5 10l5-3v10l-5-3z" fill="currentColor" stroke="none"/>
+  </svg>
 }
 
 export function AudioPreviewButton({ item, iconUrl, ctrl, compact = false }) {
   if (!item?.audio || !ctrl) return null
-  const active = ctrl.state?.itemId === item.id
-  const playing = active && ctrl.state?.playing
+  const isTaunt = item.audio.kind === 'taunt'
+  const activeVideo = isTaunt && ctrl.video?.itemId === item.id
+  const activeAudio = ctrl.state?.itemId === item.id && ctrl.state?.playing
+  const active = activeVideo || activeAudio
+  const label = isTaunt ? (activeVideo ? 'Vendo' : activeAudio ? 'Tocando' : 'Vídeo') : (activeAudio ? 'Tocando' : 'Prévia')
+  const title = isTaunt ? (activeVideo ? 'Fechar vídeo da provocação' : 'Ver prévia da provocação')
+    : (activeAudio ? 'Pausar prévia de áudio' : 'Ouvir prévia de áudio')
   return <button type="button"
-    className={'audio-preview-btn' + (compact ? ' compact' : '') + (playing ? ' playing' : '')}
-    title={playing ? 'Pausar prévia de áudio' : 'Ouvir prévia de áudio'}
-    aria-label={(playing ? 'Pausar prévia de ' : 'Ouvir prévia de ') + item.name}
+    className={'audio-preview-btn' + (compact ? ' compact' : '') + (active ? ' playing' : '')}
+    title={title}
+    aria-label={title + ' — ' + item.name}
     onClick={event => { event.stopPropagation(); ctrl.open(item, iconUrl) }}>
-    {playing ? <span className="mini-eq" aria-hidden="true"><i/><i/><i/></span> : <NotebookMark size={13}/>}
-    <span>{playing ? 'Tocando' : 'Prévia'}</span>
+    {activeAudio ? <span className="mini-eq" aria-hidden="true"><i/><i/><i/></span>
+      : isTaunt ? <VideoMark size={13}/> : <NotebookMark size={13}/>}
+    <span>{label}</span>
   </button>
+}
+
+function TauntVideoDock({ ctrl }) {
+  const video = ctrl?.video
+  const mediaRef = useRef(null)
+  const [paused, setPaused] = useState(false)
+  const [muted, setMuted] = useState(false)
+
+  useEffect(() => {
+    setPaused(false)
+    setMuted(false)
+  }, [video?.itemId])
+
+  function toggleVideo() {
+    const el = mediaRef.current
+    if (!el) return
+    if (el.paused) { el.play().catch(() => {}); setPaused(false) }
+    else { el.pause(); setPaused(true) }
+  }
+
+  return <AnimatePresence>
+    {video && <motion.aside className="taunt-dock" aria-label="Prévia da provocação"
+      initial={{ opacity: 0, y: 28, scale: 0.94, filter: 'blur(10px)' }}
+      animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, y: 22, scale: 0.95, filter: 'blur(8px)' }}
+      transition={{ type: 'spring', stiffness: 340, damping: 28 }}>
+
+      <div className="nlm-head">
+        <span className="nlm-badge" aria-hidden="true"><VideoMark size={16}/></span>
+        <div className="nlm-titles">
+          <strong title={video.name}>{video.name}</strong>
+          <small>{video.loading ? 'Buscando vídeo na Liquipedia…' : (video.cached ? 'Provocação · Cache local' : 'Provocação · Dota 2 Wiki')}</small>
+        </div>
+        <div className="nlm-controls">
+          {video.url && video.kind === 'video' && <>
+            <button type="button" className="nlm-ctrl" aria-label={muted ? 'Ativar som' : 'Silenciar'} title={muted ? 'Ativar som' : 'Silenciar'}
+              onClick={() => setMuted(m => !m)}>
+              {muted
+                ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
+                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/></svg>}
+            </button>
+            <button type="button" className="nlm-ctrl nlm-play" aria-label={paused ? 'Reproduzir' : 'Pausar'} title={paused ? 'Reproduzir' : 'Pausar'}
+              onClick={toggleVideo}>
+              {paused
+                ? <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.8v14.4a1 1 0 001.5.86l11.4-7.2a1 1 0 000-1.72L8.5 3.94A1 1 0 007 4.8z"/></svg>
+                : <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.8" height="14" rx="1.2"/><rect x="13.7" y="5" width="3.8" height="14" rx="1.2"/></svg>}
+            </button>
+          </>}
+          <button type="button" className="nlm-ctrl" aria-label="Ouvir áudio do VPK" title="Ouvir áudio local do VPK"
+            onClick={() => ctrl.openAudio(video.item, video.iconUrl)}>
+            <NotebookMark size={13}/>
+          </button>
+          <button type="button" className="nlm-ctrl" aria-label="Fechar vídeo" title="Fechar vídeo" onClick={ctrl.closeVideo}>
+            <Icon name="close"/>
+          </button>
+        </div>
+      </div>
+
+      <div className="taunt-stage">
+        {video.loading && <div className="taunt-loading">
+          <span className="taunt-spinner"/>
+          <span>Carregando clipe…</span>
+        </div>}
+        {!video.loading && video.url && (video.kind === 'image'
+          ? <img className="taunt-media" src={video.url} alt={video.name}/>
+          : <video ref={mediaRef} className="taunt-media" src={video.url} autoPlay loop playsInline muted={muted}
+              onClick={toggleVideo}/>)}
+      </div>
+    </motion.aside>}
+  </AnimatePresence>
 }
 
 export function NotebookAudioDock({ ctrl, theme }) {
@@ -590,7 +720,7 @@ export function NotebookAudioDock({ ctrl, theme }) {
   const accentColor = dark ? '#ff453a' : '#ff3b30'
   const initialLetter = (state?.name || 'D').trim().charAt(0).toUpperCase()
 
-  return <AnimatePresence>
+  return <><AnimatePresence>
     {state && <motion.aside className="nlm-dock" aria-label="Prévia de áudio"
       initial={{ opacity: 0, y: 28, scale: 0.94, filter: 'blur(10px)' }}
       animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -691,4 +821,5 @@ export function NotebookAudioDock({ ctrl, theme }) {
       </div>
     </motion.aside>}
   </AnimatePresence>
+  <TauntVideoDock ctrl={ctrl}/></>
 }
