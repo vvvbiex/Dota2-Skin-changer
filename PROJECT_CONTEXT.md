@@ -9,7 +9,7 @@ Leia primeiro em cada novo chat. Atualize este resumo quando mudar arquitetura, 
 3. Faça commit com mensagem clara em português e envie para o GitHub privado com `git add .`, `git commit -m "..."` e `git push origin main`.
 4. Quando for solicitada uma nova versão, um executável ou o fechamento de um marco importante, atualize a versão em `package.json` e `package-lock.json` e rode `npm.cmd run build:exe` para gerar o portável na raiz. Envie o commit e a tag correspondente com `git tag vX.Y.Z` e `git push origin vX.Y.Z` para disparar a Release privada.
 
-## Versão 1.0.0 · Windows x64
+## Versão 1.1.0 · Windows x64
 
 - Electron + React + Vite + Tailwind. `src/main.jsx` mantém as seleções e monta as telas. IPC restrito em `electron/preload.cjs`. O processo principal controla pasta, configurações e workers. Node ≥22.12. Use `npm.cmd test` para testar e `npm.cmd start` para compilar a interface e abrir o Electron.
 - `core/vpk.js` lê o VPK Valve v1/v2, inclusive preload e arquivos numerados. `catalog.js` lê `scripts/items/items_game.txt`, heróis e localização. `kv1.js` preserva ordem, chaves repetidas e offsets. O catálogo resolve prefabs antes de agrupar por `used_by_heroes` e `item_slot`.
@@ -24,7 +24,8 @@ Leia primeiro em cada novo chat. Atualize este resumo quando mudar arquitetura, 
 - No Windows, `npm.cmd run build:exe` compila a interface em `dist/` e gera o portátil x64 em `release/`. `scripts/build-exe.js` move o arquivo para `Dota 2 Local Skin Changer.exe` na raiz, substitui o anterior e apaga a pasta temporária. A movimentação e a limpeza repetem a operação em caso de travas breves. `npm.cmd run build`, `npm.cmd run dist` e `npm.cmd run dist:win` executam o mesmo build. O binário, as saídas de build e os binários locais do CLI em `tools/` ficam fora do Git.
 - Para publicar, envie para o repositório privado uma tag `v*` que corresponda à versão do `package.json`, começando por `v1.0.0`. `.github/workflows/release.yml` instala as dependências no Windows e roda `npm run release:github` com o token do GitHub Actions. O script verifica a versão em relação à tag do workflow, gera o portátil e usa `gh release create --verify-tag --generate-notes` para anexar o executável à Release da tag remota. A Release tem a visibilidade do repositório.
 - Para publicar manualmente uma tag que já está no remoto, use `gh auth login`, `npm.cmd ci` e `npm.cmd run release:github` na raiz de um checkout do repositório privado. Use esse fluxo quando a publicação automática estiver desativada. Nas versões seguintes, atualize `package.json` e `package-lock.json` antes de criar a tag.
-- Na preparação da 1.0.0 passaram 17 testes. `build:exe` gerou o portátil 1.0.0 na raiz e `dist` substituiu o arquivo existente. Os dois builds removeram `release/` e uma tentativa simultânea foi bloqueada. O script de publicação rejeitou uma tag incompatível com a versão. A primeira publicação depende do envio da tag ao GitHub.
+- Na preparação da 1.0.0 passaram 17 testes. `build:exe` gerou o portátil 1.0.0 na raiz e `dist` substituiu o arquivo existente. Os dois builds removeram `release/` e uma tentativa simultânea foi bloqueada. O script de publicação rejeitou uma tag incompatível com a versão. A tag `v1.0.0` foi publicada no GitHub.
+- A versão 1.1.0 inclui ícones oficiais de atributos, imagens dos equipamentos padrão, conjuntos completos, seletor de estilos, rótulos em PT-BR, filtro de categorias indisponíveis, progresso do pré-cache e a ação **Aplicar e Jogar**. Passaram os 17 testes e `npm.cmd run build:exe` compilou a interface e gerou o portátil x64 na raiz. Os metadados do executável confirmaram a versão 1.1.0.
 
 ## Interface e design system
 
