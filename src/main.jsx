@@ -99,6 +99,7 @@ function App() {
   }, [tab, heroId])
   useEffect(() => api?.onIconProgress(setCacheStatus), [])
   useEffect(() => () => clearTimeout(studioTimer.current), [])
+  useEffect(() => { audio.closeAll() }, [tab, heroId, activeSlot, audio.closeAll])
 
   function openStudio(next) {
     clearTimeout(studioTimer.current)

@@ -868,9 +868,9 @@ dialog.picker-panel .nlm-dock { bottom: 20px; }
   right: 22px;
   bottom: 54px;
   z-index: 52;
-  width: min(368px, calc(100vw - 28px));
-  padding: 14px 15px 15px;
-  border-radius: 24px;
+  width: min(500px, calc(100vw - 36px));
+  padding: 16px 17px 17px;
+  border-radius: 26px;
   background: rgba(5, 5, 7, .94);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, .1);
@@ -889,10 +889,10 @@ dialog.picker-panel .taunt-dock { bottom: 20px; right: 20px; }
 .taunt-stage {
   position: relative;
   margin-top: 12px;
-  border-radius: 16px;
+  border-radius: 18px;
   overflow: hidden;
-  min-height: 210px;
-  max-height: 310px;
+  min-height: 280px;
+  max-height: 440px;
   display: grid;
   place-items: center;
   background: radial-gradient(circle at 50% 42%, #181316, #040406 76%);
@@ -905,7 +905,7 @@ dialog.picker-panel .taunt-dock { bottom: 20px; right: 20px; }
 .taunt-media {
   display: block;
   width: 100%;
-  max-height: 308px;
+  max-height: 438px;
   object-fit: contain;
   cursor: pointer;
   animation: blur-reveal .4s var(--ease-out) both;
