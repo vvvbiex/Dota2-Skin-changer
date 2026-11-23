@@ -5,7 +5,7 @@ import { atomicWrite } from './install.js'
 
 const WIKI_API = 'https://liquipedia.net/dota2/api.php'
 const ALLOWED_MEDIA_HOST = 'liquipedia.net'
-const USER_AGENT = 'Dota2LocalSkinChanger/1.4 (https://github.com/vvvbiex/Dota2-Skin-changer; local taunt preview)'
+const USER_AGENT = 'Dota2LocalSkinChanger/1.5 (https://github.com/vvvbiex/Dota2-Skin-changer; local taunt preview)'
 const MAX_BYTES = 16 * 1024 * 1024
 const TIMEOUT_MS = 12000
 

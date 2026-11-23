@@ -140,3 +140,10 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - **`README.md` para publicação**: reescrito de forma direta com aviso destacado (`[!WARNING]`) sobre riscos e impactos em partidas online/VAC, fluxo de instalação via Releases (`Dota-2-Local-Skin-Changer-Setup.exe`, zero-config), passo a passo de uso, seção dedicada para restaurar o estado original do jogo (**Configurações → Restaurar jogo → Restaurar gameinfo.gi e limpar mods** e recuperação de backup) e créditos/aviso legal.
 - **Auditoria pré-público**: varredura no repositório rastreado confirmou ausência de caminhos locais pessoais (`C:\Users\...`, `OneDrive`) ou segredos expostos. Pendências manuais antes de tornar o repositório público no GitHub: teste de instalação limpa com o `.exe` da release (desinstalar, instalar, aplicar, restaurar e conferir arquivos), conferir a descrição curta (About) na página do repositório e decidir se deseja adicionar um arquivo `LICENSE` (atualmente ausente).
 - **Verificação**: `npm.cmd run build:renderer` e `npm.cmd test` (24/24 testes) passaram. `build:exe` não executado; sem tag.
+
+## Versão 1.5.0 · Lançamento público, licença MIT e prévia sincronizada de provocações
+
+- Versão atualizada para `1.5.0` em `package.json` e `package-lock.json` (com campos `license: "MIT"`, `repository`, `homepage` e `bugs`), `USER_AGENT` em `core/taunts.js` atualizado para `1.5`, e arquivo `LICENSE` (MIT) adicionado na raiz e referenciado no `README.md`.
+- Repositório no GitHub (`vvvbiex/Dota2-Skin-changer`) configurado para lançamento público: descrição curta (About) atualizada, tópicos adicionados (`dota2`, `skin-changer`, `electron`, `react`, `windows`, `vpk`, `modding`) e visibilidade alterada para pública.
+- Verificação: `npm.cmd test` passou (24/24 testes) e `npm.cmd run build:exe` gerou o instalador NSIS `Dota-2-Local-Skin-Changer-Setup.exe` versão `1.5.0` na raiz.
+- Commit enviado para `main` e tag `v1.5.0` enviada ao GitHub para publicar a Release pública `v1.5.0` com o novo instalador NSIS.

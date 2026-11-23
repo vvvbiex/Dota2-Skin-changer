@@ -61,8 +61,9 @@ npm.cmd start
 - `npm.cmd run build:renderer` — compila apenas o bundle da interface em `dist/`.
 - `npm.cmd run build:exe` — gera o instalador NSIS `Dota-2-Local-Skin-Changer-Setup.exe` na raiz do projeto.
 
-## Créditos e aviso legal
+## Licença, créditos e aviso legal
 
+- Distribuído sob a licença **MIT** — consulte [`LICENSE`](LICENSE).
 - Este projeto é independente e **não é afiliado, endossado ou patrocinado pela Valve Corporation**. Dota 2 é uma marca registrada da Valve Corporation.
 - O empacotamento inclui `Source2Viewer-CLI` do projeto [ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat) (licença MIT — avisos de terceiros em [`tools/THIRD_PARTY_NOTICES.txt`](tools/THIRD_PARTY_NOTICES.txt)).
 - As prévias de vídeo de provocações são obtidas sob demanda da [Liquipedia Dota 2 Wiki](https://liquipedia.net/dota2/).
