@@ -1,9 +1,11 @@
 import React, { useMemo } from 'react'
 import { AttributeArt, DefaultArt, defaultImage, ItemArt, rarityKey, rarityNames, StyleOptions, useIcons } from './ItemArt.jsx'
+import { AudioPreviewButton } from './MotionUI.jsx'
 import { attributes, Icon, Portrait, slotName } from './ui.jsx'
 
-export function Hero({ hero, attributeIcon, visibleSlots, selected, busy, showEmpty, onShowEmpty, onSlot, onStyle, onEquipSet, onClear, onBack }) {
+export function Hero({ hero, attributeIcon, visibleSlots, selected, busy, showEmpty, audio, onShowEmpty, onSlot, onStyle, onEquipSet, onClear, onBack }) {
   const [attribute, , color] = attributes.find(([name]) => name === hero.attribute) || attributes.at(-1)
+  const itemsById = useMemo(() => new Map(hero.slots.flatMap(slot => slot.items.map(item => [item.id, item]))), [hero.slots])
   const slots = useMemo(() => visibleSlots.map(slot => {
     const choice = selected.get(slot.id)
     return { slot, choice, item: slot.items.find(item => item.id === String(choice?.itemId)) }
@@ -38,12 +40,14 @@ export function Hero({ hero, attributeIcon, visibleSlots, selected, busy, showEm
       </div>
       <div className="slot-grid">{slots.map(({ slot, choice, item }) => {
         const rarity = rarityKey(item?.rarity)
+        const itemIcon = item ? icons.get(item.image) : null
         return <article className="slot-card" key={slot.id} data-equipped={Boolean(item)} data-rarity={rarity}>
+          {item?.audio && <AudioPreviewButton item={item} iconUrl={itemIcon?.url} ctrl={audio} compact/>}
           <button type="button" className="slot-button" aria-haspopup="dialog" aria-label={slotName(slot.id)}
             disabled={busy} onClick={() => onSlot(slot.id)}>
             <span className="slot-title">{slotName(slot.id)}</span>
             <span className="slot-visual">
-              {item ? <ItemArt item={item} icon={icons.get(item.image)}/> : <DefaultArt slot={slot} icon={icons.get(defaultImage(slot))}/>}
+              {item ? <ItemArt item={item} icon={itemIcon}/> : <DefaultArt slot={slot} icon={icons.get(defaultImage(slot))}/>}
               {item && <span className="equipped-check" title="Equipado"><Icon name="check"/></span>}
             </span>
             <span className="slot-caption">
@@ -64,8 +68,11 @@ export function Hero({ hero, attributeIcon, visibleSlots, selected, busy, showEm
         for (const { slot, itemId } of set.items) if (!pieces.has(slot)) pieces.set(slot, itemId)
         const equipped = [...pieces].every(([slot, itemId]) => String(selected.get(slot)?.itemId) === itemId)
         const rarity = rarityKey(set.rarity)
+        const audioPiece = [...pieces.values()].map(id => itemsById.get(id)).find(it => it?.audio)
+        const setIcon = icons.get(set.iconPath)
         return <article key={set.id} className="set-card" data-rarity={rarity}>
-          <ItemArt item={{ name: set.name, image: set.iconPath }} icon={icons.get(set.iconPath)}/>
+          {audioPiece && <AudioPreviewButton item={{ ...audioPiece, name: set.name }} iconUrl={setIcon?.url} ctrl={audio} compact/>}
+          <ItemArt item={{ name: set.name, image: set.iconPath }} icon={setIcon}/>
           <div className="set-details">
             <small className="rarity-text">{rarityNames[rarity]} · {pieces.size} {pieces.size === 1 ? 'peça' : 'peças'}</small>
             <h3>{set.name}</h3>

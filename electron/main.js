@@ -7,12 +7,13 @@ import { atomicWrite, detectDota } from '../core/install.js'
 import { createPack, readPack } from '../core/packs.js'
 import { assertDotaClosed } from '../core/signatures.js'
 import { equipSet } from '../core/selections.js'
+import { createAudioReader } from '../core/audio.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 let root
 let busy = false
 let window
-let cli, iconSession, catalog
+let cli, iconSession, catalog, audioReader
 const bundledFile = name => app.isPackaged ? path.join(process.resourcesPath, name)
   : path.join(here, '..', name === 'icons-pack.zip' ? 'assets' : 'tools', name)
 const packPath = () => { const file = bundledFile('icons-pack.zip'); return fs.existsSync(file) ? file : '' }
@@ -125,6 +126,7 @@ function handlers() {
     init() {
       const data = settings()
       root = data.root && fs.existsSync(path.join(data.root, 'game/dota/pak01_dir.vpk')) ? data.root : detectDota()
+      audioReader = null
       cli = resolveCli(data.decompiler)
       return { root, cli, bundledCli: cli !== '' && cli === bundledCli(), iconPack: Boolean(packPath()), presets: data.presets, store: dataPath('presets.json'), log: dataPath('diagnostics.json') }
     },
@@ -137,6 +139,7 @@ function handlers() {
       save({ ...settings(), root: candidate })
       catalog = null
       root = candidate
+      audioReader = null
       resetIcons()
       return root
     },
@@ -157,6 +160,16 @@ function handlers() {
     indexIcons,
     equipSet: (choices, heroId, setId, styles) => equipSet(choices, catalog?.heroes.find(h => h.id === heroId), setId, styles),
     cacheStatus: () => progress,
+    audioPreview: meta => {
+      if (!root) throw Error('Pasta do Dota 2 não selecionada.')
+      audioReader ??= createAudioReader(root)
+      return audioReader.preview(meta)
+    },
+    audioTrack: entry => {
+      if (!root) throw Error('Pasta do Dota 2 não selecionada.')
+      audioReader ??= createAudioReader(root)
+      return audioReader.track(entry)
+    },
     play: () => shell.openExternal('steam://rungameid/570'),
     async scan() {
       const result = await run('scan')

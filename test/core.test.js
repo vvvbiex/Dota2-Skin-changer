@@ -13,6 +13,7 @@ import { compareSchemas, diagnose, sha } from '../core/diagnostics.js'
 import { createIconReader } from '../core/icons.js'
 import { writeZipStore, openZipStore } from '../core/zip.js'
 import { createPack, readPack } from '../core/packs.js'
+import { decodeVsnd, createAudioReader } from '../core/audio.js'
 import { fileSignature, signaturesFile, signaturesBackup } from '../core/signatures.js'
 import { equipSet } from '../core/selections.js'
 
@@ -456,4 +457,70 @@ test('ícones: pacote embutido tem prioridade, depois cache de disco e, sem CLI,
   writeZipStore(partial, [['outro.webp', Buffer.from('x')]])
   const mixed = createIconReader(root, cache, '', undefined, partial)
   assert.ok(mixed.lookup(['econ/test'])['econ/test'].url.startsWith('data:image/png;base64,'))
+})
+
+test('áudio: decodifica .vsnd_c MP3 e PCM16 para WAV e resolve prévias de locutor, música e voz', t => {
+  function fakeVsnd(version, dataBlock, stream) {
+    const header = Buffer.alloc(16)
+    const dir = Buffer.alloc(12)
+    const streamOff = 16 + 12 + dataBlock.length
+    header.writeUInt32LE(streamOff, 0)
+    header.writeUInt16LE(12, 4)
+    header.writeUInt16LE(version, 6)
+    header.writeUInt32LE(8, 8) // blockOff = 8 + 8 = 16
+    header.writeUInt32LE(1, 12)
+    dir.write('DATA', 0, 'ascii')
+    dir.writeUInt32LE(8, 4) // dataOff = 16 + 4 + 8 = 28
+    dir.writeUInt32LE(dataBlock.length, 8)
+    return Buffer.concat([header, dir, dataBlock, stream])
+  }
+  const mp3Data = Buffer.alloc(16)
+  mp3Data.writeUInt16LE(44100, 0); mp3Data[2] = 2; mp3Data[3] = 1; mp3Data.writeFloatLE(2.5, 12)
+  const mp3Stream = Buffer.from([0xff, 0xfb, 0x90, 0x00, 1, 2, 3, 4])
+  const mp3Vsnd = fakeVsnd(4, mp3Data, mp3Stream)
+  const decodedMp3 = decodeVsnd(mp3Vsnd)
+  assert.equal(decodedMp3.mime, 'audio/mpeg')
+  assert.deepEqual(decodedMp3.data, mp3Stream)
+  assert.ok(Math.abs(decodedMp3.duration - 2.5) < 0.01)
+
+  const pcmData = Buffer.alloc(16)
+  pcmData.writeUInt32LE((22050 << 14) | (2 << 7) | 1, 0) // ver 1 PCM16, 22050 Hz, stereo
+  const pcmStream = Buffer.alloc(400)
+  const decodedPcm = decodeVsnd(fakeVsnd(1, pcmData, pcmStream))
+  assert.equal(decodedPcm.mime, 'audio/wav')
+  assert.equal(decodedPcm.data.toString('ascii', 0, 4), 'RIFF')
+  assert.equal(decodedPcm.data.toString('ascii', 8, 12), 'WAVE')
+  assert.equal(decodedPcm.data.readUInt16LE(22), 2)
+  assert.equal(decodedPcm.data.readUInt32LE(24), 22050)
+
+  const audioSchema = '"items_game" { player_loadout_slots { 0 music } items { ' +
+    '10 { item_slot announcer baseitem 1 } ' +
+    '11 { item_slot announcer name "Axe Ann" visuals { asset_modifier0 { type announcer_preview asset "sounds/vo/announcer_dlc_axe/line1.vsnd" modifier "#CAP_1" } } } ' +
+    '20 { item_slot music baseitem 1 } ' +
+    '21 { item_slot music name "Synth" visuals { asset_modifier0 { type sound asset "valve_dota_001.music." modifier "synth_01.music." } } } ' +
+    '30 { item_slot head name "Helm" used_by_heroes { npc_dota_hero_axe 1 } visuals { asset_modifier0 { type response_criteria asset "automaton_axe" } } } ' +
+    '} }'
+  const parsed = parseItemsGame(audioSchema, { tokens: new Map([['cap_1', 'Primeiro sangue!']]) })
+  const ann = parsed.catalog.global.slots.find(s => s.id === 'announcer').items[0]
+  const mus = parsed.catalog.global.slots.find(s => s.id === 'music').items[0]
+  const helm = parsed.catalog.heroes[0].slots[0].items[0]
+  assert.equal(ann.audio.kind, 'announcer')
+  assert.equal(ann.audio.clips[0].caption, 'Primeiro sangue!')
+  assert.equal(mus.audio.kind, 'music')
+  assert.equal(mus.audio.musicPrefix, 'synth_01')
+  assert.equal(helm.audio, undefined)
+
+  const root = fakeInstall(t)
+  const record = Buffer.alloc(18)
+  record.writeUInt32LE(crc32(mp3Vsnd)); record.writeUInt16LE(32767, 6)
+  record.writeUInt32LE(mp3Vsnd.length, 12); record.writeUInt16LE(65535, 16)
+  const tree = Buffer.concat([Buffer.from('vsnd_c\0sounds/vo/announcer_dlc_axe\0line1\0'), record, Buffer.alloc(3)])
+  const header = Buffer.alloc(12)
+  header.writeUInt32LE(0x55aa1234); header.writeUInt32LE(1, 4); header.writeUInt32LE(tree.length, 8)
+  fs.writeFileSync(path.join(root, 'game/dota/pak01_dir.vpk'), Buffer.concat([header, tree, mp3Vsnd]))
+  const reader = createAudioReader(root)
+  const preview = reader.preview(ann.audio)
+  assert.equal(preview.tracks.length, 1)
+  assert.equal(preview.tracks[0].caption, 'Primeiro sangue!')
+  assert.ok(preview.initial.url.startsWith('data:audio/mpeg;base64,'))
 })

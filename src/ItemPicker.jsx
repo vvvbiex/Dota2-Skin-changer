@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DefaultArt, defaultImage, ItemArt, rarityKey, rarityNames, rarityOrder, StyleOptions, useIcons } from './ItemArt.jsx'
-import { SegmentedControl } from './MotionUI.jsx'
+import { AudioPreviewButton, NotebookAudioDock, SegmentedControl } from './MotionUI.jsx'
 import { fold, globalName, Icon, Search, slotGlyph, slotName } from './ui.jsx'
 
 const pageSize = 24
@@ -15,7 +15,7 @@ const rank = rarity => {
   return index === -1 ? rarityOrder.length : index
 }
 
-export function ItemPicker({ owner, slots, slot, selected, busy, onSlot, onChange, onClose }) {
+export function ItemPicker({ owner, slots, slot, selected, busy, audio, theme, onSlot, onChange, onClose }) {
   const dialog = useRef(null)
   const results = useRef(null)
   const closeTimer = useRef(null)
@@ -110,9 +110,11 @@ export function ItemPicker({ owner, slots, slot, selected, busy, onSlot, onChang
             {displayed.map(item => {
               const rarity = rarityKey(item.rarity)
               const active = String(selectedId) === item.id
+              const icon = icons.get(item.image)
               return <article key={item.id} className="picker-item" data-rarity={rarity} data-equipped={active}>
+                <AudioPreviewButton item={item} iconUrl={icon?.url} ctrl={audio} compact/>
                 <button type="button" className="item-tile" aria-pressed={active} disabled={busy || !canSelect} onClick={() => onChange(item.id)}>
-                  <span className="tile-art"><ItemArt item={item} icon={icons.get(item.image)}/></span>
+                  <span className="tile-art"><ItemArt item={item} icon={icon}/></span>
                   {active ? <span className="equipped-check" title="Equipado"><Icon name="check"/></span>
                     : <span className="equip-action" title="Equipar"><Icon name="plus"/></span>}
                   <span className="tile-caption"><small className="rarity-text">{rarityNames[rarity]}</small><strong>{item.name}</strong></span>
@@ -139,5 +141,6 @@ export function ItemPicker({ owner, slots, slot, selected, busy, onSlot, onChang
         </button>)}
       </div>
     </div>
+    <NotebookAudioDock ctrl={audio} theme={theme}/>
   </dialog>
 }

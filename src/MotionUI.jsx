@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import dotaLogo from './dota-logo.png'
 import { Icon } from './ui.jsx'
@@ -251,5 +251,378 @@ export function ApplyStudioOverlay({ state, theme, onDismiss }) {
         </div>
       </motion.div>
     </motion.div>}
+  </AnimatePresence>
+}
+
+// 4. NotebookLM Audio Overview Player (baseado em notebooklm.html)
+const KIND_LABEL = {
+  music: 'Trilha sonora',
+  announcer: 'Locutor',
+  mega_kills: 'Locutor de matanças',
+  voice: 'Voz personalizada',
+}
+const formatTime = sec => {
+  const s = Math.max(0, Math.floor(Number.isFinite(sec) ? sec : 0))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+const pseudoNoise = x => 0.5 * Math.sin(x * 0.9) + 0.32 * Math.sin(x * 2.3 + 1.3) + 0.18 * Math.sin(x * 4.1 + 2.1)
+
+function NotebookMark({ size = 17 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" style={{ flex: 'none' }}>
+    <path d="M3.5 18.5V13a8.5 8.5 0 0117 0v5.5"/>
+    <path d="M8 18.5V13.5a4 4 0 018 0v5"/>
+    <circle cx="12" cy="17.6" r="1.5" fill="currentColor" stroke="none"/>
+  </svg>
+}
+
+export function useAudioPreview(api) {
+  const [state, setState] = useState(null)
+  const audioRef = useRef(null)
+  const ctxRef = useRef(null)
+  const analyserRef = useRef(null)
+  const cacheRef = useRef(new Map())
+  const reqRef = useRef(0)
+  const stateRef = useRef(null)
+  stateRef.current = state
+
+  const ensureAudio = useCallback(() => {
+    if (!audioRef.current) {
+      const el = new Audio()
+      el.volume = 0.78
+      audioRef.current = el
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext
+        if (AudioCtx) {
+          const ctx = new AudioCtx()
+          const src = ctx.createMediaElementSource(el)
+          const analyser = ctx.createAnalyser()
+          analyser.fftSize = 128
+          analyser.smoothingTimeConstant = 0.78
+          src.connect(analyser)
+          analyser.connect(ctx.destination)
+          ctxRef.current = ctx
+          analyserRef.current = analyser
+        }
+      } catch { /* fallback sem analyser */ }
+    }
+    if (ctxRef.current?.state === 'suspended') ctxRef.current.resume().catch(() => {})
+    return audioRef.current
+  }, [])
+
+  const loadAndPlay = useCallback(async (track, reqId) => {
+    const el = ensureAudio()
+    let data = cacheRef.current.get(track.entry)
+    if (!data) {
+      data = await api.audioTrack(track.entry)
+      if (reqRef.current !== reqId) return
+      if (cacheRef.current.size > 32) cacheRef.current.clear()
+      cacheRef.current.set(track.entry, data)
+    }
+    el.src = data.url
+    el.currentTime = 0
+    try { await el.play() } catch { /* autoplay guard */ }
+    if (reqRef.current !== reqId) return
+    setState(cur => cur ? { ...cur, loading: false, playing: true, error: '', currentTime: 0, duration: data.duration || el.duration || 0 } : cur)
+  }, [api, ensureAudio])
+
+  const selectTrack = useCallback(async index => {
+    const cur = stateRef.current
+    if (!cur || !cur.tracks.length) return
+    const nextIdx = ((index % cur.tracks.length) + cur.tracks.length) % cur.tracks.length
+    const reqId = ++reqRef.current
+    setState(prev => prev ? { ...prev, index: nextIdx, loading: true, error: '' } : prev)
+    try { await loadAndPlay(cur.tracks[nextIdx], reqId) }
+    catch (e) {
+      if (reqRef.current !== reqId) return
+      setState(prev => prev ? { ...prev, loading: false, playing: false, error: e.message || 'Falha ao carregar áudio.' } : prev)
+    }
+  }, [loadAndPlay])
+
+  useEffect(() => {
+    const el = audioRef.current
+    if (!el) return
+    const onTime = () => setState(cur => cur ? {
+      ...cur,
+      currentTime: el.currentTime || 0,
+      duration: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : cur.duration,
+    } : cur)
+    const onPlay = () => setState(cur => cur ? { ...cur, playing: true } : cur)
+    const onPause = () => setState(cur => cur ? { ...cur, playing: false } : cur)
+    const onEnded = () => {
+      const cur = stateRef.current
+      if (cur && cur.tracks.length > 1 && cur.index + 1 < cur.tracks.length) selectTrack(cur.index + 1)
+      else setState(prev => prev ? { ...prev, playing: false, currentTime: prev.duration } : prev)
+    }
+    el.addEventListener('timeupdate', onTime)
+    el.addEventListener('loadedmetadata', onTime)
+    el.addEventListener('play', onPlay)
+    el.addEventListener('pause', onPause)
+    el.addEventListener('ended', onEnded)
+    return () => {
+      el.removeEventListener('timeupdate', onTime)
+      el.removeEventListener('loadedmetadata', onTime)
+      el.removeEventListener('play', onPlay)
+      el.removeEventListener('pause', onPause)
+      el.removeEventListener('ended', onEnded)
+    }
+  }, [state !== null, selectTrack])
+
+  useEffect(() => () => {
+    audioRef.current?.pause()
+    ctxRef.current?.close().catch(() => {})
+  }, [])
+
+  const open = useCallback(async (item, iconUrl = null) => {
+    if (!api?.audioPreview || !item?.audio) return
+    const cur = stateRef.current
+    if (cur && cur.itemId === item.id && !cur.error) {
+      const el = ensureAudio()
+      if (el.paused) {
+        if (el.ended || (el.duration && el.currentTime >= el.duration - 0.1)) el.currentTime = 0
+        el.play().catch(() => {})
+      } else el.pause()
+      return
+    }
+    const reqId = ++reqRef.current
+    const el = ensureAudio()
+    el.pause()
+    setState({
+      itemId: item.id,
+      name: item.name,
+      kind: item.audio.kind,
+      iconUrl,
+      tracks: [],
+      index: 0,
+      loading: true,
+      playing: false,
+      currentTime: 0,
+      duration: 0,
+      error: '',
+    })
+    try {
+      const res = await api.audioPreview(item.audio)
+      if (reqRef.current !== reqId) return
+      if (!res?.tracks?.length || !res.initial) {
+        setState(prev => prev ? { ...prev, loading: false, error: res?.reason || 'Sem prévia disponível.' } : prev)
+        return
+      }
+      if (cacheRef.current.size > 32) cacheRef.current.clear()
+      cacheRef.current.set(res.initial.entry, res.initial)
+      const startIndex = res.initialIndex || 0
+      setState(prev => prev ? {
+        ...prev,
+        tracks: res.tracks,
+        index: startIndex,
+        loading: false,
+        duration: res.initial.duration || 0,
+      } : prev)
+      el.src = res.initial.url
+      el.currentTime = 0
+      await el.play().catch(() => {})
+      if (reqRef.current === reqId) setState(prev => prev ? { ...prev, playing: !el.paused } : prev)
+    } catch (e) {
+      if (reqRef.current !== reqId) return
+      setState(prev => prev ? { ...prev, loading: false, error: e.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '') } : prev)
+    }
+  }, [api, ensureAudio])
+
+  const togglePlay = useCallback(() => {
+    const el = audioRef.current
+    if (!el || !el.src) return
+    if (ctxRef.current?.state === 'suspended') ctxRef.current.resume().catch(() => {})
+    if (el.paused) {
+      if (el.ended || (el.duration && el.currentTime >= el.duration - 0.1)) el.currentTime = 0
+      el.play().catch(() => {})
+    } else el.pause()
+  }, [])
+
+  const seek = useCallback(fraction => {
+    const el = audioRef.current
+    if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return
+    el.currentTime = clamp(fraction) * el.duration
+    setState(prev => prev ? { ...prev, currentTime: el.currentTime } : prev)
+  }, [])
+
+  const close = useCallback(() => {
+    reqRef.current++
+    audioRef.current?.pause()
+    setState(null)
+  }, [])
+
+  return { state, analyserRef, open, togglePlay, selectTrack, seek, close }
+}
+
+export function AudioPreviewButton({ item, iconUrl, ctrl, compact = false }) {
+  if (!item?.audio || !ctrl) return null
+  const active = ctrl.state?.itemId === item.id
+  const playing = active && ctrl.state?.playing
+  return <button type="button"
+    className={'audio-preview-btn' + (compact ? ' compact' : '') + (playing ? ' playing' : '')}
+    title={playing ? 'Pausar prévia de áudio' : 'Ouvir prévia de áudio'}
+    aria-label={(playing ? 'Pausar prévia de ' : 'Ouvir prévia de ') + item.name}
+    onClick={event => { event.stopPropagation(); ctrl.open(item, iconUrl) }}>
+    {playing ? <span className="mini-eq" aria-hidden="true"><i/><i/><i/></span> : <NotebookMark size={13}/>}
+    <span>{playing ? 'Tocando' : 'Prévia'}</span>
+  </button>
+}
+
+export function NotebookAudioDock({ ctrl, theme }) {
+  const state = ctrl?.state
+  const [wave, setWave] = useState(() => ({ bars: Array(31).fill(0.1), left: 0.25, right: 0.25, t: 0 }))
+  const dark = theme === 'dark'
+
+  useEffect(() => {
+    if (!state) return
+    let raf = 0
+    const start = performance.now()
+    const freq = new Uint8Array(64)
+    const tick = now => {
+      const t = (now - start) / 1000
+      const playing = state.playing
+      const loading = state.loading
+      let energy = 0
+      const bars = new Array(31)
+      const analyser = ctrl.analyserRef?.current
+      if (playing && analyser) {
+        analyser.getByteFrequencyData(freq)
+        for (let i = 0; i < 31; i++) {
+          const bin = Math.min(freq.length - 1, Math.floor(i * 1.35) + 1)
+          const raw = freq[bin] / 255
+          const env = 0.55 + 0.45 * Math.abs(Math.sin(t * 5.2 + i * 0.45))
+          const val = clamp(Math.max(raw * 1.18, 0.14 * env))
+          bars[i] = val
+          energy += raw
+        }
+        energy = clamp((energy / 31) * 1.85)
+      } else if (playing || loading) {
+        for (let i = 0; i < 31; i++) {
+          const u = i / 30
+          const sweep = loading ? Math.exp(-Math.pow(u - ((t * 0.8) % 1.4 - 0.2), 2) / 0.04) * 0.65 : 0
+          const organic = loading ? 0.14 + sweep : clamp(0.18 + 0.72 * Math.abs(pseudoNoise(t * 4.4 + i * 0.78)))
+          bars[i] = organic
+        }
+        energy = loading ? 0.45 : 0.72
+      } else {
+        for (let i = 0; i < 31; i++) bars[i] = 0.12
+        energy = 0.08
+      }
+      const swing = 0.5 + 0.5 * Math.sin(t * 1.35)
+      const left = playing ? clamp(0.45 + 0.55 * energy * (0.65 + 0.35 * swing)) : loading ? 0.45 : 0.2
+      const right = playing ? clamp(0.45 + 0.55 * energy * (0.65 + 0.35 * (1 - swing))) : loading ? 0.45 : 0.2
+      setWave({ bars, left, right, t })
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [Boolean(state), state?.playing, state?.loading, ctrl?.analyserRef])
+
+  const track = state?.tracks?.[state.index]
+  const progress = state && state.duration > 0 ? clamp(state.currentTime / state.duration) : 0
+  const caption = state?.error || (state?.loading ? 'Extraindo áudio do VPK…' : (track?.caption || track?.label || 'Prévia de áudio'))
+  const subtitle = state ? (KIND_LABEL[state.kind] || 'Áudio') + (state.tracks.length > 1 ? ` · Faixa ${state.index + 1} de ${state.tracks.length}` : '') : ''
+  const idleBarColor = dark ? '#242429' : '#d2d2d8'
+  const accentColor = dark ? '#ff453a' : '#ff3b30'
+  const initialLetter = (state?.name || 'D').trim().charAt(0).toUpperCase()
+
+  return <AnimatePresence>
+    {state && <motion.aside className="nlm-dock" aria-label="Prévia de áudio"
+      initial={{ opacity: 0, y: 28, scale: 0.94, filter: 'blur(10px)' }}
+      animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, y: 22, scale: 0.95, filter: 'blur(8px)' }}
+      transition={{ type: 'spring', stiffness: 340, damping: 28 }}>
+
+      <div className="nlm-head">
+        <span className="nlm-badge" aria-hidden="true"><NotebookMark size={17}/></span>
+        <div className="nlm-titles">
+          <strong title={state.name}>{state.name}</strong>
+          <small>{subtitle}</small>
+        </div>
+        <div className="nlm-controls">
+          {state.tracks.length > 1 && <>
+            <button type="button" className="nlm-ctrl" aria-label="Faixa anterior" title="Faixa anterior"
+              onClick={() => ctrl.selectTrack(state.index - 1)}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M18 5v14L8 12z"/><rect x="5" y="5" width="2.4" height="14" rx="1"/></svg>
+            </button>
+            <button type="button" className="nlm-ctrl" aria-label="Próxima faixa" title="Próxima faixa"
+              onClick={() => ctrl.selectTrack(state.index + 1)}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5v14l10-7z"/><rect x="16.6" y="5" width="2.4" height="14" rx="1"/></svg>
+            </button>
+          </>}
+          <button type="button" className="nlm-ctrl nlm-play" disabled={state.loading || Boolean(state.error)}
+            aria-label={state.playing ? 'Pausar' : 'Reproduzir'} title={state.playing ? 'Pausar' : 'Reproduzir'}
+            onClick={ctrl.togglePlay}>
+            {state.playing
+              ? <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.8" height="14" rx="1.2"/><rect x="13.7" y="5" width="3.8" height="14" rx="1.2"/></svg>
+              : <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.8v14.4a1 1 0 001.5.86l11.4-7.2a1 1 0 000-1.72L8.5 3.94A1 1 0 007 4.8z"/></svg>}
+          </button>
+          <button type="button" className="nlm-ctrl" aria-label="Fechar prévia" title="Fechar prévia" onClick={ctrl.close}>
+            <Icon name="close"/>
+          </button>
+        </div>
+      </div>
+
+      <div className="nlm-stage" aria-hidden="true">
+        <div className="nlm-orb">
+          {[0, 0.5].map((off, j) => {
+            const u = (wave.t * 1.05 + off) % 1
+            return <i key={j} className="nlm-ring" style={{ opacity: ((1 - u) * 0.72 * wave.left).toFixed(3), transform: `scale(${(1 + u * 0.58).toFixed(3)})` }}/>
+          })}
+          <i className="nlm-glow" style={{ opacity: wave.left.toFixed(3) }}/>
+          <span className="nlm-avatar nlm-avatar-a">
+            {state.iconUrl ? <img src={state.iconUrl} alt=""/> : initialLetter}
+          </span>
+        </div>
+
+        <div className="nlm-wave">
+          {wave.bars.map((val, i) => {
+            const u = i / 30
+            const weight = wave.left * Math.exp(-u * 2.2) + wave.right * Math.exp(-(1 - u) * 2.2)
+            const h = 3 + 23 * clamp(val * (0.45 + 0.75 * weight))
+            const color = hexMix(idleBarColor, accentColor, clamp(val * 1.15 + weight * 0.35))
+            return <i key={i} style={{ height: `${h.toFixed(1)}px`, background: color }}/>
+          })}
+        </div>
+
+        <div className="nlm-orb">
+          {[0.25, 0.75].map((off, j) => {
+            const u = (wave.t * 1.05 + off) % 1
+            return <i key={j} className="nlm-ring" style={{ opacity: ((1 - u) * 0.65 * wave.right).toFixed(3), transform: `scale(${(1 + u * 0.55).toFixed(3)})` }}/>
+          })}
+          <i className="nlm-glow" style={{ opacity: wave.right.toFixed(3) }}/>
+          <span className="nlm-avatar nlm-avatar-b">
+            <NotebookMark size={14}/>
+          </span>
+        </div>
+      </div>
+
+      <div className="nlm-caption-wrap">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p key={caption} className={'nlm-caption' + (state.error ? ' error' : '')}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2 }}>
+            {caption}
+          </motion.p>
+        </AnimatePresence>
+      </div>
+
+      <div className="nlm-foot">
+        <div className="nlm-scrubber" role="slider" aria-label="Progresso do áudio"
+          aria-valuemin={0} aria-valuemax={Math.round(state.duration || 0)} aria-valuenow={Math.round(state.currentTime || 0)}
+          tabIndex={0}
+          onClick={event => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            ctrl.seek((event.clientX - rect.left) / rect.width)
+          }}>
+          <div className="nlm-track">
+            <div className="nlm-fill" style={{ transform: `translateX(${((progress - 1) * 100).toFixed(2)}%)` }}/>
+          </div>
+          <i className="nlm-thumb" style={{ left: `${(progress * 100).toFixed(2)}%` }}/>
+        </div>
+        <span className="nlm-time">
+          <strong>{formatTime(state.currentTime)}</strong>
+          <span> / {formatTime(state.duration)}</span>
+        </span>
+      </div>
+    </motion.aside>}
   </AnimatePresence>
 }

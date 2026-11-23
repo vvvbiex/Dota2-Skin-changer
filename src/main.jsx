@@ -11,7 +11,7 @@ import { ItemPicker } from './ItemPicker.jsx'
 import { isIndexingIcons, useAttributeIcons } from './ItemArt.jsx'
 import { Presets } from './Presets.jsx'
 import { Settings } from './Settings.jsx'
-import { ApplyStudioOverlay, SegmentedControl, ThemeSwitcher } from './MotionUI.jsx'
+import { ApplyStudioOverlay, NotebookAudioDock, SegmentedControl, ThemeSwitcher, useAudioPreview } from './MotionUI.jsx'
 import { attributes, compareGlobalSlots, compareHeroSlots, Icon, isGlobalVisible } from './ui.jsx'
 
 const api = window.arsenal
@@ -60,6 +60,7 @@ function App() {
   const running = useRef(false)
   const catalogScroll = useRef(0)
   const studioTimer = useRef(null)
+  const audio = useAudioPreview(api)
   const hero = catalog?.heroes.find(owner => owner.id === heroId)
   const owner = hero || catalog?.global
   const owners = useMemo(() => catalog ? [...catalog.heroes, catalog.global] : [], [catalog])
@@ -247,10 +248,10 @@ function App() {
           onHero={openHero} onGlobal={setActiveSlot} onChooseRoot={chooseRoot}/>
       </div>
       {tab === 'catalog' && hero && <Hero key={cli} hero={hero} attributeIcon={heroAttributeIcon}
-        visibleSlots={pickerSlots} selected={selected} busy={Boolean(busy)} showEmpty={emptyHeroSlots}
+        visibleSlots={pickerSlots} selected={selected} busy={Boolean(busy)} showEmpty={emptyHeroSlots} audio={audio}
         onShowEmpty={setEmptyHeroSlots} onSlot={setActiveSlot} onStyle={chooseItem} onEquipSet={equipSet} onClear={clearHero} onBack={() => setHero('')}/>}
       {tab === 'catalog' && pickerSlot && <ItemPicker key={owner.id} owner={owner} slots={pickerSlots} slot={pickerSlot} selected={selected}
-        busy={Boolean(busy)} onSlot={setActiveSlot} onChange={(itemId, styleId) => chooseItem(pickerSlot.id, itemId, styleId)} onClose={() => setActiveSlot(null)}/>}
+        busy={Boolean(busy)} audio={audio} theme={theme} onSlot={setActiveSlot} onChange={(itemId, styleId) => chooseItem(pickerSlot.id, itemId, styleId)} onClose={() => setActiveSlot(null)}/>}
       <AnimatePresence mode="wait" initial={false}>
       {tab === 'presets' && <motion.div key="presets" {...page}><Presets owners={owners} choices={choices} presets={presets} presetName={presetName}
         setPresetName={setPresetName} store={store} busy={Boolean(busy)} onLoad={loadPack}
@@ -300,6 +301,7 @@ function App() {
         <span> • {savedPreset ? 'Pré-definição salva' : 'v' + version}</span>
       </div>
     </footer>
+    {!(tab === 'catalog' && pickerSlot) && <NotebookAudioDock ctrl={audio} theme={theme}/>}
     <ApplyStudioOverlay state={studio} theme={theme} onDismiss={closeStudio}/>
   </div>
 }

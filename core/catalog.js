@@ -28,6 +28,43 @@ function inherit(own, base) {
   return result
 }
 
+function extractAudioMeta(visuals, slotId, heroIds, translate) {
+  if (!visuals.length) return null
+  const clips = [], chatwheel = [], criteria = []
+  let folder = null, musicPrefix = null
+  for (const node of visuals) {
+    if (!node.key.startsWith('asset_modifier')) continue
+    const kids = children(node)
+    const type = scalar(kids, 'type')
+    const asset = scalar(kids, 'asset')
+    const modifier = scalar(kids, 'modifier')
+    if (type === 'announcer_preview' && asset) {
+      clips.push({
+        path: asset.replaceAll('\\', '/').toLowerCase(),
+        caption: modifier ? translate(modifier, '') : '',
+      })
+    } else if (type === 'announcer' && asset) {
+      folder = asset.replace(/^npc_dota_hero_/i, '').toLowerCase()
+    } else if (type === 'sound' && slotId === 'music' && modifier && !musicPrefix) {
+      const part = modifier.split('.')[0]?.toLowerCase()
+      if (part && part !== 'valve_dota_001') musicPrefix = part
+    } else if (type === 'chatwheel' && modifier) {
+      chatwheel.push(modifier.toLowerCase())
+    } else if (type === 'response_criteria' && asset) {
+      criteria.push(asset.toLowerCase())
+    }
+  }
+  if (slotId === 'music' && musicPrefix) return { kind: 'music', musicPrefix }
+  if ((slotId === 'announcer' || slotId === 'mega_kills') && (clips.length || folder)) {
+    return { kind: slotId, clips, folder }
+  }
+  const voiceCriteria = criteria.filter(c => !/^automaton_|_helmet$/.test(c))
+  if (heroIds.length === 1 && (clips.length || chatwheel.length || voiceCriteria.length)) {
+    return { kind: 'voice', heroId: heroIds[0], clips, chatwheel, criteria: voiceCriteria }
+  }
+  return null
+}
+
 export function parseItemsGame(text, { heroDefinitions = [], tokens = new Map() } = {}) {
   const document = parseKV(text)
   const root = children(find(document, 'items_game'))
@@ -107,9 +144,11 @@ export function parseItemsGame(text, { heroDefinitions = [], tokens = new Map() 
       const name = scalar(children(n), 'name')
       return { id: n.key, name: translate(name, name && !name.startsWith('#') ? name : 'Estilo ' + (Number(n.key) + 1)) }
     })
+    const audio = extractAudioMeta(visuals, slotId, heroIds, translate)
     const item = {
       id, name: translate(scalar(fields, 'item_name'), scalar(fields, 'name') || id),
       rarity: scalar(fields, 'item_rarity') || 'common', image: scalar(fields, 'image_inventory') || null, styles,
+      ...(audio ? { audio } : {}),
     }
     const record = { node, fields, used, heroIds, slotId, isGlobal, isDefault, item, equipment: equipment && !category, isBundle }
     records.set(id, record)
