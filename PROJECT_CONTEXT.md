@@ -93,3 +93,5 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - install.js: assinaturas gravadas após os gameinfo (dentro da transação, com reversão em falha); estoreGame as restaura. electron/main.js bloqueia apply/restore/recover com o Dota 2 aberto. diagnostics.js ganhou o check dota.signatures. Configurações exibe o aviso.
 - Verificação: 22 testes passaram (
 pm test). uild:exe não foi executado; sem tag.
+
+- Correção: o CRC de dota.signatures usa bytes invertidos (little-endian). O CRC32 padrão 84F7897B do gameinfo_branchspecific.gi original vira 7B89F784 no arquivo. Validado contra a linha original da Valve. A primeira versão gravava o CRC sem inverter, e por isso o VAC continuava bloqueando. Não usar o FixMatchMaking.bat de terceiros: ele baixa um gameinfo_branchspecific.gi externo e cria a pasta Dota2SkinChanger.

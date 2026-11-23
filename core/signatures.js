@@ -14,11 +14,14 @@ export const signaturesFile = root => path.join(root, 'game', 'bin', 'win64', 'd
 export const signaturesBackup = root => signaturesFile(root) + '.local-skins.bak'
 export const signaturesReceipt = root => signaturesFile(root) + '.local-skins.json'
 
+const swap = n => { const b = Buffer.alloc(4); b.writeUInt32LE(n >>> 0); return b.toString('hex').toUpperCase() }
+
 export function fileSignature(data) {
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
   return {
     sha1: createHash('sha1').update(buffer).digest('hex').toUpperCase(),
-    crc: crc32(buffer).toString(16).toUpperCase().padStart(8, '0'),
+    // A Valve grava o CRC32 com os bytes invertidos (little-endian): 7B89F784 para o CRC 84F7897B.
+    crc: swap(crc32(buffer)),
   }
 }
 

@@ -287,7 +287,9 @@ test('monta dota_custom também em gameinfo_branchspecific.gi quando ele define 
 
 test('dota.signatures: SHA1/CRC32, escrita sem duplicar, diagnóstico e restauração do backup', async t => {
   const known = fileSignature('abc')
-  assert.deepEqual(known, { sha1: 'A9993E364706816ABA3E25717850C26C9CD0D89D', crc: '352441C2' })
+  assert.deepEqual(known, { sha1: 'A9993E364706816ABA3E25717850C26C9CD0D89D', crc: 'C2412435' })
+  // O CRC do gameinfo_branchspecific.gi original da Valve (SHA1 224B6F87...) vem com os bytes invertidos.
+  assert.equal(fileSignature(Buffer.from('')).crc, '00000000')
   const root = fakeInstall(t)
   const sigs = signaturesFile(root)
   fs.mkdirSync(path.dirname(sigs), { recursive: true })
