@@ -1,8 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 
-const { version, build: { productName } } = JSON.parse(readFileSync('package.json', 'utf8'))
-const artifact = `${productName}.exe`
+const { version, build: { artifactName: artifact } } = JSON.parse(readFileSync('package.json', 'utf8'))
 const tag = `v${version}`
 const requestedTag = process.argv[2]
 

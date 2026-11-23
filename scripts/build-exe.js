@@ -1,4 +1,4 @@
-import { mkdir, rename, rm } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { Arch, build, Platform } from 'electron-builder'
@@ -6,7 +6,7 @@ import { build as buildRenderer } from 'vite'
 
 const releaseDir = 'release'
 const lockDir = '.build-exe.lock'
-const artifact = 'Dota 2 Local Skin Changer.exe'
+const { build: { artifactName: artifact } } = JSON.parse(await readFile('package.json', 'utf8'))
 const stagedArtifact = join(releaseDir, artifact)
 const retryOptions = { maxRetries: 5, retryDelay: 200 }
 const transientErrors = new Set(['EACCES', 'EBUSY', 'EPERM'])
@@ -20,7 +20,7 @@ try {
 
 try {
   await buildRenderer()
-  await build({ targets: Platform.WINDOWS.createTarget(['portable'], Arch.x64), publish: 'never' })
+  await build({ targets: Platform.WINDOWS.createTarget(['nsis'], Arch.x64), publish: 'never' })
 
   // Keep the previous executable in place until Windows accepts the replacement.
   for (let attempt = 0; ; attempt++) {
@@ -38,4 +38,4 @@ try {
   await rm(lockDir, { recursive: true, force: true, ...retryOptions })
 }
 
-console.log(`Executável portátil disponível na raiz: ${artifact}`)
+console.log(`Instalador NSIS disponível na raiz: ${artifact}`)

@@ -73,7 +73,7 @@ button.primary { color: #1c1203; background: #f6ac37; border-color: var(--accent
   --sidebar-width: 210px;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  grid-template-rows: 64px minmax(0, 1fr) 34px;
+  grid-template-rows: 64px minmax(0, 1fr) auto;
   height: 100dvh;
 }
 .shell[data-collapsed=true] { --sidebar-width: 62px; }
@@ -88,18 +88,7 @@ button.primary { color: #1c1203; background: #f6ac37; border-color: var(--accent
   min-width: 0;
 }
 .brand { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 0 6px; white-space: nowrap; }
-.brand-icon {
-  display: grid;
-  place-items: center;
-  width: 37px;
-  height: 37px;
-  flex: none;
-  border: 1px solid #f59e0b6b;
-  border-radius: 10px 4px;
-  background: linear-gradient(140deg, #f59e0b30, #f59e0b08 75%);
-  color: #ffb841;
-}
-.brand-icon svg { width: 24px; height: 24px; }
+.brand-icon { width: 32px; height: 32px; flex: none; object-fit: contain; }
 .brand-text { display: grid; gap: 2px; line-height: 1; text-transform: uppercase; }
 .brand-text strong { font: 750 19px/1 var(--heading); letter-spacing: .045em; }
 .brand-text small { color: var(--accent-text); font-size: 9px; font-weight: 700; letter-spacing: .16em; }
@@ -174,13 +163,12 @@ button.primary { color: #1c1203; background: #f6ac37; border-color: var(--accent
   color: var(--muted);
   font-size: 11px;
 }
-.game-location, .statusbar > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.game-location { max-width: 59%; }
-.game-location i { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #79849c; }
-.game-location i.on { background: #4ade80; box-shadow: 0 0 8px #4ade8073; }
-.statusbar .error { color: #ffab9a; }
-.cache-progress { display: flex; align-items: center; flex: none; gap: 6px; margin-left: auto; font-variant-numeric: tabular-nums; }
-.cache-progress progress { width: 64px; height: 5px; accent-color: var(--accent); }
+.statusbar { min-height: 36px; padding-block: 6px; flex-wrap: wrap; row-gap: 3px; }
+.operation-status { min-width: 0; flex: 1 1 360px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.operation-status > span:first-child { color: #ecedf1; }
+.operation-status > .error:first-child { color: #ffab9a; }
+.release-status { margin-left: auto; font-variant-numeric: tabular-nums; }
+.release-status progress { width: 40px; height: 5px; margin-left: 5px; accent-color: var(--accent); }
 
 .catalog-toolbar { display: grid; gap: 9px; }
 .search-field {
@@ -263,7 +251,7 @@ button.primary { color: #1c1203; background: #f6ac37; border-color: var(--accent
 }
 .attribute-art { width: 18px; height: 18px; object-fit: contain; flex: none; }
 .hero-group h3 small { margin-left: auto; font-size: 10px; font-variant-numeric: tabular-nums; }
-.portrait-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 4px; }
+.portrait-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(47px, 1fr)); gap: 4px; }
 .hero-card {
   display: block;
   position: relative;
@@ -287,7 +275,7 @@ button.primary { color: #1c1203; background: #f6ac37; border-color: var(--accent
 .hero-card img { transition: transform var(--feedback-time) var(--ease-out); }
 @media (hover: hover) {
   .hero-card:hover:not(:disabled) { z-index: 1; border-color: var(--accent); box-shadow: 0 0 10px #f59e0b63; }
-  .hero-card:hover img { transform: scale(1.06); }
+  .hero-card:hover img { transform: scale(1.04); }
 }
 .hero-card[data-changed=true] { border-color: #f59e0b7f; }
 .hero-mark {
@@ -301,11 +289,11 @@ button.primary { color: #1c1203; background: #f6ac37; border-color: var(--accent
   box-shadow: 0 0 0 2px #19150b, 0 0 8px #f59e0b80;
 }
 .global-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-.global-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 9px; }
+.global-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 7px; }
 .global-card {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 2 / 1;
   min-width: 0;
   padding: 0;
   background: radial-gradient(ellipse at 50% 35%, #303744, #151c28 70%);

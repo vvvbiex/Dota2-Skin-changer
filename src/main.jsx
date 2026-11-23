@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
+import dotaLogo from './dota-logo.png'
+import { version } from '../package.json'
 import { Catalog } from './Catalog.jsx'
 import { Hero } from './Hero.jsx'
 import { ItemPicker } from './ItemPicker.jsx'
@@ -62,6 +64,15 @@ function App() {
   const heroAttribute = attributes.find(([name]) => name === hero?.attribute)?.[2]
   const heroAttributeIcon = attributeIcons.get(catalog?.attributeIcons?.[heroAttribute])
   const gamePath = root ? root.replace(/[\\/]+$/, '') + '\\game' : ''
+
+  const savedPreset = useMemo(() => presets.some(pack => pack.name === presetName.trim() &&
+    selectionKey(pack.selections) === currentSelection), [presets, presetName, currentSelection])
+  const cachePercent = cacheStatus.total > 0 ? Math.floor(100 * cacheStatus.done / cacheStatus.total) : null
+  const indexing = isIndexingIcons(cacheStatus)
+  const cacheLabel = cacheStatus.phase === 'concluído' ? 'Cache de ícones 100%'
+    : indexing ? 'Cache de ícones' + (cachePercent == null ? ' em andamento' : ' ' + cachePercent + '%')
+    : cacheStatus.phase === 'erro' ? 'Falha no cache de ícones' : 'Cache de ícones em espera'
+  const statusText = busy || message || (pending ? 'Alterações pendentes' : 'Pronto')
 
   useLayoutEffect(() => {
     content.current.scrollTop = tab === 'catalog' && !heroId ? catalogScroll.current : 0
@@ -138,7 +149,7 @@ function App() {
         setReport(result)
         if (!result.ok) {
           changeTab('settings'); setError(true)
-          setMessage('Falha na aplicação ou na verificação. Consulte o diagnóstico.')
+          setMessage(result.checks?.find(check => !check.ok)?.detail || 'Falha na verificação. Consulte o diagnóstico.')
           return
         }
       } else {
@@ -149,10 +160,10 @@ function App() {
       if (playAfter) {
         setBusy('Abrindo Steam…')
         await api.play()
-        setMessage('Alterações aplicadas. Solicitação enviada à Steam.')
+        setMessage(choices.length ? '✓ Operação bem-sucedida • Mods aplicados com sucesso!' : 'Itens padrão restaurados. Solicitação enviada à Steam.')
       } else {
         changeTab('settings')
-        setMessage(choices.length ? 'Mods gravados e verificados em disco.' : 'Itens padrão restaurados.')
+        setMessage(choices.length ? '✓ Operação bem-sucedida • Mods aplicados com sucesso!' : 'Itens padrão restaurados.')
       }
     })
   }
@@ -163,7 +174,7 @@ function App() {
 
   return <div className="shell" data-collapsed={collapsed}>
     <aside className="sidebar">
-      <div className="brand"><span className="brand-icon"><Icon name="brand"/></span>
+      <div className="brand"><img className="brand-icon" src={dotaLogo} alt="Dota 2"/>
         <span className="brand-text"><strong>Dota 2</strong><small>Local Skin Changer</small></span>
       </div>
       <nav aria-label="Navegação principal">
@@ -234,17 +245,16 @@ function App() {
     </main>
 
     <footer className="statusbar">
-      <span className="game-location" title={gamePath}>
-        <i className={catalog ? 'on' : ''} aria-hidden="true"/>
-        {gamePath ? 'Dota 2 · ' + gamePath : 'Pasta do Dota 2 não selecionada'}
-      </span>
-      {isIndexingIcons(cacheStatus) && <span className="cache-progress" title="Preparando cache de ícones">
-        <span>Cache de ícones</span>
-        <progress aria-label="Progresso do cache de ícones" max={cacheStatus.total || 1}
-          value={cacheStatus.total ? cacheStatus.done : undefined}/>
-        {cacheStatus.total > 0 && <span>{Math.floor(100 * cacheStatus.done / cacheStatus.total)}%</span>}
-      </span>}
-      <div role="status" className={error ? 'error' : ''}>{busy || message || choices.length + (choices.length === 1 ? ' slot selecionado' : ' slots selecionados')}</div>
+      <div className="operation-status" role="status" title={[statusText, gamePath].filter(Boolean).join(' • ')}>
+        <span className={error ? 'error' : ''}>{statusText}</span>
+        <span className="game-location">{gamePath ? ' • Dota 2 - ' + gamePath : ' • Pasta do Dota 2 não selecionada'}</span>
+      </div>
+      <div className="release-status">
+        <span title={'Versão v' + version}>Instalador NSIS (Release GitHub)</span>
+        <span title={cacheStatus.message || cacheLabel}> • {cacheLabel}</span>
+        {indexing && <progress aria-label="Progresso do cache de ícones" max={cacheStatus.total || 1} value={cacheStatus.total ? cacheStatus.done : undefined}/>}
+        <span> • {savedPreset ? 'Pré-definição salva' : 'v' + version}</span>
+      </div>
     </footer>
   </div>
 }

@@ -1,6 +1,6 @@
 {
   "name": "dota-local-skin-changer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Editor local de cosméticos de Dota 2",
   "author": "Dota Local Skin Changer",
   "private": true,
@@ -35,7 +35,7 @@
   "build": {
     "appId": "local.dota.skinchanger",
     "productName": "Dota 2 Local Skin Changer",
-    "artifactName": "Dota 2 Local Skin Changer.${ext}",
+    "artifactName": "Dota-2-Local-Skin-Changer-Setup.exe",
     "directories": {
       "output": "release"
     },
@@ -48,11 +48,17 @@
     "electronFuses": {
       "runAsNode": false
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
+    },
     "win": {
       "signExecutable": false,
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": ["x64"]
         }
       ]

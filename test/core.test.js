@@ -157,12 +157,12 @@ test('equipar um mascote de conjunto mantém o padrão compartilhado nos demais 
   assert.equal(after.catalog.heroes.find(h => h.id === hero).slots.find(s => s.id === 'summon').defaultId, '21')
 })
 
-test('diagnóstico identifica perda de montagem, dados antigos, corrupção e recuperação do backup', t => {
+test('diagnóstico identifica perda de montagem, dados antigos, corrupção e recuperação do backup', async t => {
   const info = originalInfo.replace('\tGame core', '\tMod dota\r\n\tGame core')
   const root = fakeInstall(t, info)
   const config = path.join(root, 'game/dota/gameinfo.gi'), log = path.join(root, 'game/dota/console.log')
   fs.writeFileSync(log, 'mounted game/dota_custom/pak01_dir.vpk\n')
-  const mod = installMod(root, patchItemsGame(parseItemsGame(source), [selection]))
+  const mod = await installMod(root, patchItemsGame(parseItemsGame(source), [selection]))
   let report = diagnose(root)
   assert.equal(report.ok, true)
   assert.match(report.checks[0].detail, /mod dota_custom na linha/)
@@ -180,7 +180,7 @@ test('diagnóstico identifica perda de montagem, dados antigos, corrupção e re
   data[data.length - 50] ^= 1
   fs.writeFileSync(mod, data)
   fs.writeFileSync(config, 'GameInfo {')
-  restoreGame(root, true)
+  await restoreGame(root, true)
   assert.equal(fs.readFileSync(config, 'utf8'), info)
   assert.equal(fs.existsSync(mod), false)
   assert.ok(fs.readdirSync(path.dirname(config)).some(n => n.includes('.recovery-')))
@@ -232,63 +232,87 @@ test('VPK v2 multipartes combina preload e segmento externo e verifica CRC e lim
   assert.throws(() => openVpk(archive).read(ITEMS_PATH), /Intervalo/)
 })
 
-test('aplica, reaplica e restaura em presença de atualização da Valve', t => {
+test('aplica, reaplica e restaura em presença de atualização da Valve', async t => {
   const root = fakeInstall(t)
   const schema = loadGame(root)
   const patched = patchItemsGame(schema, [selection, { hero: 'global', slot: 'weather', itemId: '6' }])
   const file = path.join(root, 'game/dota/gameinfo.gi')
-  const mod = installMod(root, patched)
+  fs.chmodSync(file, 0o444)
+  const mod = await installMod(root, patched)
+  fs.chmodSync(mod, 0o444)
   assert.equal(openVpk(mod).read(ITEMS_PATH).toString(), patched)
   assert.equal(fs.readFileSync(file + '.local-skins.bak', 'utf8'), originalInfo)
   const first = fs.readFileSync(file, 'utf8')
   assert.ok(first.indexOf('dota_custom // dota-local-skin-changer') < first.indexOf('\tGame dota\r\n'))
-  installMod(root, source)
+  await installMod(root, source)
   assert.equal(fs.readFileSync(file, 'utf8'), first)
   assert.equal(openVpk(mod).read(ITEMS_PATH).toString(), source)
   fs.appendFileSync(file, '// Atualização do jogo\r\n')
-  restoreGame(root); restoreGame(root)
+  await restoreGame(root); await restoreGame(root)
   assert.equal(fs.readFileSync(file, 'utf8'), originalInfo + '// Atualização do jogo\r\n')
   assert.equal(fs.existsSync(mod), false)
 })
 
-test('protege VPK alterado na restauração e montagem de terceiros', t => {
+test('protege VPK alterado na restauração e montagem de terceiros', async t => {
   const root = fakeInstall(t)
   assert.throws(() => editGameInfo(originalInfo.replace('\tGame core', '\tGame dota_custom\r\n\tGame core'), true), /outra configuração/)
-  const file = installMod(root, source)
+  const file = await installMod(root, source)
   fs.writeFileSync(file, 'Arquivo externo')
-  assert.throws(() => restoreGame(root), /alterado fora/)
+  await assert.rejects(() => restoreGame(root), /alterado fora/)
   assert.equal(fs.readFileSync(file, 'utf8'), 'Arquivo externo')
 })
 
-test('limpa resíduos de VPK e temporários de builds com ou sem recibo', t => {
+test('limpa resíduos de VPK e temporários de builds com ou sem recibo', async t => {
   const root = fakeInstall(t)
   const dir = path.join(root, 'game/dota_custom')
   fs.mkdirSync(dir)
   for (const name of ['pak01_dir.vpk', 'pak01_000.vpk', 'pak01.vpk', '.local-skins-12345678-1234-1234-1234-123456789abc.tmp']) {
     fs.writeFileSync(path.join(dir, name), 'build anterior')
   }
-  const archive = installMod(root, source)
+  fs.chmodSync(path.join(dir, 'pak01_000.vpk'), 0o444)
+  const archive = await installMod(root, source)
   assert.equal(openVpk(archive).read(ITEMS_PATH).toString(), source)
   fs.writeFileSync(path.join(dir, 'pak01_001.vpk'), 'parte antiga')
-  installMod(root, source)
+  await installMod(root, source)
   assert.deepEqual(fs.readdirSync(dir).sort(), ['.dota-local-skins.json', 'pak01_dir.vpk'])
-  restoreGame(root)
+  await restoreGame(root)
   assert.equal(fs.existsSync(dir), false)
 })
 
-test('bloqueia arquivos e subpastas desconhecidos e os preserva ao forçar a aplicação', t => {
+test('bloqueia arquivos e subpastas desconhecidos e os preserva ao forçar a aplicação', async t => {
   const root = fakeInstall(t)
   const dir = path.join(root, 'game/dota_custom')
   fs.mkdirSync(dir)
   fs.writeFileSync(path.join(dir, 'externo.vpk'), 'outro pacote')
   fs.mkdirSync(path.join(dir, 'pak01_000.vpk'))
-  assert.throws(() => installMod(root, source), { code: 'CUSTOM_DIR_CONTENTS' })
+  await assert.rejects(() => installMod(root, source), { code: 'CUSTOM_DIR_CONTENTS' })
   assert.equal(fs.readFileSync(path.join(root, 'game/dota/gameinfo.gi'), 'utf8'), originalInfo)
-  const { archive, preserved } = installModWithReport(root, source, { force: true })
+  const { archive, preserved } = await installModWithReport(root, source, { force: true })
   assert.equal(openVpk(archive).read(ITEMS_PATH).toString(), source)
   assert.equal(path.dirname(preserved), path.dirname(dir))
   assert.equal(fs.readFileSync(path.join(preserved, 'externo.vpk'), 'utf8'), 'outro pacote')
   assert.ok(fs.statSync(path.join(preserved, 'pak01_000.vpk')).isDirectory())
+})
+
+test('repete renomeação bloqueada e preserva o estado anterior se o bloqueio persistir', async t => {
+  const root = fakeInstall(t)
+  const file = await installMod(root, source)
+  const before = fs.readFileSync(file)
+  const receipt = path.join(path.dirname(file), '.dota-local-skins.json')
+  const beforeReceipt = fs.readFileSync(receipt)
+  const rename = fs.promises.rename
+  let locks = 5
+  t.mock.method(fs.promises, 'rename', async (from, to) => {
+    if (to === file && locks-- > 0) throw Object.assign(Error('arquivo em uso'), { code: 'EPERM' })
+    await rename(from, to)
+  })
+  const patched = patchItemsGame(loadGame(root), [selection])
+  await assert.rejects(installMod(root, patched), /Windows bloqueou.*pak01_dir/)
+  assert.deepEqual(fs.readFileSync(file), before)
+  assert.deepEqual(fs.readFileSync(receipt), beforeReceipt)
+  locks = 1
+  await installMod(root, patched)
+  assert.equal(openVpk(file).read(ITEMS_PATH).toString(), patched)
 })
 
 test('ícones funcionam sem CLI quando em cache e invalidam por CRC do recurso', async t => {

@@ -4,7 +4,7 @@ Aplicativo desktop para Windows x64, com catálogo extraído da instalação do 
 
 ## Usar no Windows
 
-1. Abra `Dota 2 Local Skin Changer.exe` na raiz do projeto ou baixe o executável pela Release do GitHub. A primeira leitura usa as bibliotecas da Steam. Em **Configurações**, **Selecionar pasta** permite indicar manualmente o diretório `dota 2 beta`.
+1. Baixe `Dota-2-Local-Skin-Changer-Setup.exe` pela Release do GitHub ou use o instalador gerado na raiz do projeto. Execute o assistente, escolha a pasta e abra o aplicativo ao concluir ou pelo atalho no desktop. A primeira leitura usa as bibliotecas da Steam. Em **Configurações**, **Selecionar pasta** permite indicar manualmente o diretório `dota 2 beta`.
 2. No **Catálogo**, abra um herói ou uma categoria de **Globais**. Escolha o cosmético no overlay e feche-o para selecionar o estilo, quando disponível. Para o exemplo do Earthshaker, escolha **Forma base → Domínio Planetar → 2 · Declínio Ardente**.
 3. Em **Presets / Packs**, dê um nome à seleção e clique em **Salvar Pack**. **Carregar** recupera a seleção para revisão. Use **Exportar Pack (.json)** e **Importar Pack (.json)** para transferir as escolhas.
 4. Com o jogo fechado, clique em **Aplicar mods** e confira o relatório. Use **Jogar** no cabeçalho para iniciar o Dota pela Steam. Cada aplicação relê o VPK original e gera o conjunto completo de escolhas atual. Para desativar todos os mods, use **Restaurar gameinfo.gi e limpar mods** em **Configurações**.
@@ -41,8 +41,8 @@ src/
   style.css       Tema e integração Tailwind
 scripts/
   start.js        Inicialização local do Electron
-  build-exe.js    Empacotamento do portátil Windows
-  release-github.js Publicação do portátil no GitHub
+  build-exe.js    Empacotamento do instalador NSIS Windows
+  release-github.js Publicação do instalador NSIS no GitHub
 test/
   core.test.js    Testes de VPK, KV1, catálogo, patch e instalação
 index.html
@@ -74,7 +74,7 @@ npm.cmd test
 npm.cmd start
 ```
 
-Use `npm.cmd run dev` para recompilar a interface durante a edição e recarregue a janela com Ctrl+R. `npm.cmd run build:exe` gera o portátil x64 na raiz e limpa `release/`. O executável distribuído já contém o runtime. As imagens dos heróis são carregadas da CDN da Valve. Quando a CDN está indisponível, os cartões exibem as iniciais.
+Use `npm.cmd run dev` para recompilar a interface durante a edição e recarregue a janela com Ctrl+R. `npm.cmd run build:exe` gera o instalador NSIS x64 na raiz e limpa `release/`. O executável distribuído já contém o runtime. As imagens dos heróis são carregadas da CDN da Valve. Quando a CDN está indisponível, os cartões exibem as iniciais.
 
 ## Usar o backend diretamente
 
@@ -111,9 +111,9 @@ console.log(vpk.length)
 
 ## Instalação e restauração
 
-`installMod(root, patchedText)` gera `game/dota_custom/pak01_dir.vpk` v2 e registra `Game dota_custom` antes de `Game dota` em `FileSystem/SearchPaths`. Quando existe `Mod dota`, adiciona também `Mod dota_custom` antes dele. A primeira aplicação salva `game/dota/gameinfo.gi.local-skins.bak`. O recibo contém o SHA-256 do pacote e do esquema de origem.
+`await installMod(root, patchedText)` gera `game/dota_custom/pak01_dir.vpk` v2 e registra `Game dota_custom` antes de `Game dota` em `FileSystem/SearchPaths`. Quando existe `Mod dota`, adiciona também `Mod dota_custom` antes dele. A primeira aplicação salva `game/dota/gameinfo.gi.local-skins.bak`. O recibo contém o SHA-256 do pacote e do esquema de origem.
 
-`restoreGame(root)` remove as linhas identificadas pelo aplicativo e os arquivos do mod. A restauração edita o `gameinfo.gi` atual para preservar alterações posteriores da Valve. O primeiro backup e os presets continuam disponíveis. O aplicativo verifica conflitos com pastas, montagens e VPKs de terceiros antes de escrever.
+`await restoreGame(root)` remove as linhas identificadas pelo aplicativo e os arquivos do mod. A restauração edita o `gameinfo.gi` atual para preservar alterações posteriores da Valve. O primeiro backup e os presets continuam disponíveis. O aplicativo verifica conflitos com pastas, montagens e VPKs de terceiros antes de escrever.
 
 ## Verificação
 

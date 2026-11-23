@@ -9,7 +9,7 @@ import path from 'node:path'
 try {
   const { action, root, selections, force } = workerData
   let value
-  if (action === 'restore' || action === 'recover') value = restoreGame(root, action === 'recover')
+  if (action === 'restore' || action === 'recover') value = await restoreGame(root, action === 'recover')
   else if (action === 'diagnose') value = diagnose(root)
   else {
     const schema = loadGame(root)
@@ -20,7 +20,7 @@ try {
       const info = path.join(root, 'game/dota/gameinfo.gi')
       const before = fs.readFileSync(info, 'utf8')
       const patched = patchItemsGame(schema, selections, affected)
-      const { preserved } = installModWithReport(root, patched, { originalSchema: schema.text, affected, force })
+      const { preserved } = await installModWithReport(root, patched, { originalSchema: schema.text, affected, force })
       value = diagnose(root)
       value.preserved = preserved
       value.gameInfoChanged = before !== fs.readFileSync(info, 'utf8')

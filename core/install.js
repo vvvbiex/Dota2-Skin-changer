@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { setTimeout } from 'node:timers/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { children, parseKV, scalar } from './kv1.js'
@@ -108,23 +109,78 @@ function inspectMod(files, recover = false) {
   return ''
 }
 
-function commitInfo(file, original, updated) {
+const lockErrors = new Set(['EPERM', 'EACCES', 'EBUSY'])
+
+async function retryWrite(file, operation) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await operation() } catch (cause) {
+      if (!lockErrors.has(cause.code)) throw cause
+      if (attempt === 4) throw Object.assign(new Error(
+        'O Windows bloqueou a gravação em ' + file + '. Feche o Dota 2, aguarde a sincronização e confira a permissão de escrita da pasta.', { cause }), { code: cause.code })
+      await setTimeout(100 * (attempt + 1))
+    }
+  }
+}
+
+async function writable(file) {
+  const stat = await fs.promises.lstat(file).catch(error => {
+    if (error.code !== 'ENOENT') throw error
+  })
+  if (stat?.isSymbolicLink()) throw Error('Caminho de instalação redirecionado: ' + file)
+  if (stat && !(stat.mode & 0o200)) await fs.promises.chmod(file, stat.mode | 0o200)
+}
+
+async function removeFile(file, directory = false) {
+  await retryWrite(file, async () => {
+    await writable(file)
+    if (directory) await fs.promises.rmdir(file)
+    else await fs.promises.rm(file, { force: true })
+  })
+}
+
+async function moveFile(source, destination, beforeRename) {
+  await retryWrite(destination, async () => {
+    await writable(source)
+    await writable(destination)
+    if (beforeRename) await beforeRename()
+    await fs.promises.rename(source, destination)
+  })
+}
+
+async function replaceFile(file, data, beforeRename) {
+  const temp = path.join(path.dirname(file), '.local-skins-' + randomUUID() + '.tmp')
+  try {
+    await retryWrite(temp, () => fs.promises.writeFile(temp, data, { flag: 'wx', flush: true }))
+    await moveFile(temp, file, beforeRename)
+  } finally { await removeFile(temp) }
+}
+
+async function copyBackup(source, destination) {
+  await retryWrite(destination, () => fs.promises.copyFile(source, destination, fs.constants.COPYFILE_EXCL))
+}
+
+async function commitInfo(file, original, updated) {
   if (original === updated) return
-  if (fs.readFileSync(file, 'utf8') !== original) throw Error('gameinfo.gi mudou durante a operação. Tente novamente.')
-  atomicWrite(file, updated)
+  await replaceFile(file, updated, async () => {
+    if (await fs.promises.readFile(file, 'utf8') !== original) throw Error('gameinfo.gi mudou durante a operação. Tente novamente.')
+  })
 }
 
-function clearMod(files) {
-  fs.rmSync(files.archive, { force: true })
-  fs.unlinkSync(files.receipt)
-  fs.rmdirSync(files.dir)
+async function clearMod(files) {
+  await removeFile(files.archive)
+  const receipt = await fs.promises.readFile(files.receipt)
+  await removeFile(files.receipt)
+  try { await removeFile(files.dir, true) } catch (error) {
+    await replaceFile(files.receipt, receipt)
+    throw error
+  }
 }
 
-export function installMod(root, patchedText, options) {
-  return installModWithReport(root, patchedText, options).archive
+export async function installMod(root, patchedText, options) {
+  return (await installModWithReport(root, patchedText, options)).archive
 }
 
-export function installModWithReport(root, patchedText, { originalSchema = readSchema(baseArchive(root)), affected, force = false } = {}) {
+export async function installModWithReport(root, patchedText, { originalSchema = readSchema(baseArchive(root)), affected, force = false } = {}) {
   const validated = compareSchemas(originalSchema, patchedText, affected)
   const files = locations(root)
   const current = exists(files.dir)
@@ -137,78 +193,94 @@ export function installModWithReport(root, patchedText, { originalSchema = readS
   const original = fs.readFileSync(files.info, 'utf8')
   const updated = editGameInfo(original, true)
   const existing = current && !blocked
+  if (current?.isDirectory()) await retryWrite(files.dir, () => writable(files.dir))
   if (existing) for (const entry of contents) {
-    if (![ARCHIVE, RECEIPT].includes(entry.name.toLowerCase())) fs.unlinkSync(path.join(files.dir, entry.name))
+    if (![ARCHIVE, RECEIPT].includes(entry.name.toLowerCase())) await removeFile(path.join(files.dir, entry.name))
   }
   const rollback = existing && exists(files.archive) ? fs.readFileSync(files.archive) : null
   const oldReceipt = existing && exists(files.receipt) ? fs.readFileSync(files.receipt) : null
   const prior = rollback ? digest(rollback) : null
   const data = buildItemsVpk(patchedText)
   const hash = digest(data)
-  const parent = path.dirname(files.dir)
-  if (!exists(files.backup)) fs.copyFileSync(files.info, files.backup, fs.constants.COPYFILE_EXCL)
+  if (!exists(files.backup)) await copyBackup(files.info, files.backup)
   // Keep both hashes so a stopped update can be retried either side of the rename.
   let baseline
   try { baseline = consoleBaseline(root) } catch { /* Optional evidence when the client permits shared log reads. */ }
   const receipt = JSON.stringify({ app: 'dota-local-skins', source: digest(originalSchema), affected: validated.changed, console: baseline,
     hashes: [...new Set([prior, hash].filter(Boolean))] })
-  let preserved, staging, installed = false
+  const movedEntries = []
+  let preserved, created = false, receiptWritten = false, archiveWritten = false
   try {
-    if (existing) {
-      atomicWrite(files.receipt, receipt, parent)
-      if (prior !== hash) atomicWrite(files.archive, data, parent)
-    } else {
-      staging = fs.mkdtempSync(files.dir + '.stage-')
-      fs.writeFileSync(path.join(staging, RECEIPT), receipt)
-      fs.writeFileSync(path.join(staging, ARCHIVE), data, { flush: true })
-      if (blocked) {
-        const destination = files.dir + '.backup-' + randomUUID()
-        fs.renameSync(files.dir, destination)
+    if (blocked) {
+      const destination = files.dir + '.backup-' + randomUUID()
+      if (current.isDirectory()) {
+        await retryWrite(destination, () => fs.promises.mkdir(destination))
+        preserved = destination
+        for (const { name } of contents) {
+          await moveFile(path.join(files.dir, name), path.join(destination, name))
+          movedEntries.push(name)
+        }
+      } else {
+        await moveFile(files.dir, destination)
         preserved = destination
       }
-      fs.renameSync(staging, files.dir)
-      installed = true
+    }
+    if (!current?.isDirectory()) {
+      await retryWrite(files.dir, () => fs.promises.mkdir(files.dir))
+      created = true
+    }
+    await replaceFile(files.receipt, receipt)
+    receiptWritten = true
+    if (prior !== hash) {
+      await replaceFile(files.archive, data)
+      archiveWritten = true
     }
     if (readSchema(files.archive) !== patchedText) throw Error('O conteúdo relido do VPK diverge do patch.')
-    commitInfo(files.info, original, updated)
+    await commitInfo(files.info, original, updated)
     if (fs.readFileSync(files.info, 'utf8') !== updated) throw Error('gameinfo.gi mudou após a gravação.')
   }
   catch (error) {
-    if (existing) {
-      if (rollback && prior !== hash) atomicWrite(files.archive, rollback, parent)
-      if (!rollback) fs.rmSync(files.archive, { force: true })
-      if (oldReceipt) atomicWrite(files.receipt, oldReceipt, parent)
-      else fs.rmSync(files.receipt, { force: true })
+    try {
+      if (archiveWritten) {
+        if (rollback) await replaceFile(files.archive, rollback)
+        else await removeFile(files.archive)
+      }
+      if (receiptWritten) {
+        if (oldReceipt) await replaceFile(files.receipt, oldReceipt)
+        else await removeFile(files.receipt)
+      }
+      if (created) await removeFile(files.dir, true)
+      if (preserved && current.isDirectory()) {
+        for (const name of movedEntries.reverse()) {
+          await moveFile(path.join(preserved, name), path.join(files.dir, name))
+        }
+        await removeFile(preserved, true)
+      } else if (preserved) await moveFile(preserved, files.dir)
+    } catch (recoveryError) {
+      throw Error(error.message + ' Falha ao reverter: ' + recoveryError.message + (preserved ? ' Backup em ' + preserved : ''))
     }
-    if (installed) clearMod(files)
-    if (preserved) fs.renameSync(preserved, files.dir)
     throw error
-  } finally {
-    if (staging && exists(staging)) {
-      for (const name of [RECEIPT, ARCHIVE]) fs.rmSync(path.join(staging, name), { force: true })
-      fs.rmdirSync(staging)
-    }
   }
   return { archive: files.archive, preserved }
 }
 
-export function restoreGame(root, recoverBackup = false) {
+export async function restoreGame(root, recoverBackup = false) {
   const files = locations(root)
   const prior = inspectMod(files, recoverBackup)
   let preserved
   if (recoverBackup) {
     const backup = fs.readFileSync(files.backup, 'utf8')
     editGameInfo(backup, true) // validate the backup before replacing anything
-    if (exists(files.info)) fs.copyFileSync(files.info, files.info + '.recovery-' + randomUUID(), fs.constants.COPYFILE_EXCL)
-    atomicWrite(files.info, editGameInfo(backup, false))
+    if (exists(files.info)) await copyBackup(files.info, files.info + '.recovery-' + randomUUID())
+    await replaceFile(files.info, editGameInfo(backup, false))
     if (prior === 'modified') {
       preserved = path.join(path.dirname(files.dir), 'dota_custom.recovery-' + randomUUID() + '.vpk')
-      fs.renameSync(files.archive, preserved)
+      await moveFile(files.archive, preserved)
     }
   } else {
     const original = fs.readFileSync(files.info, 'utf8')
-    commitInfo(files.info, original, editGameInfo(original, false))
+    await commitInfo(files.info, original, editGameInfo(original, false))
   }
-  if (prior !== null) clearMod(files)
+  if (prior !== null) await clearMod(files)
   return preserved
 }
