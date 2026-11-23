@@ -275,117 +275,168 @@ function NotebookMark({ size = 17 }) {
   </svg>
 }
 
+function dataUrlToArrayBuffer(url) {
+  const comma = url.indexOf(',')
+  const raw = atob(comma >= 0 ? url.slice(comma + 1) : url)
+  const bytes = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i)
+  return bytes.buffer
+}
+
 export function useAudioPreview(api) {
   const [state, setState] = useState(null)
-  const audioRef = useRef(null)
   const ctxRef = useRef(null)
   const analyserRef = useRef(null)
+  const gainRef = useRef(null)
+  const sourceRef = useRef(null)
+  const bufferRef = useRef(null)
+  const offsetRef = useRef(0)
+  const startedAtRef = useRef(0)
   const cacheRef = useRef(new Map())
   const reqRef = useRef(0)
   const stateRef = useRef(null)
   stateRef.current = state
 
-  const ensureAudio = useCallback(() => {
-    if (!audioRef.current) {
-      const el = new Audio()
-      el.volume = 0.78
-      audioRef.current = el
-      try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext
-        if (AudioCtx) {
-          const ctx = new AudioCtx()
-          const src = ctx.createMediaElementSource(el)
-          const analyser = ctx.createAnalyser()
-          analyser.fftSize = 128
-          analyser.smoothingTimeConstant = 0.78
-          src.connect(analyser)
-          analyser.connect(ctx.destination)
-          ctxRef.current = ctx
-          analyserRef.current = analyser
-        }
-      } catch { /* fallback sem analyser */ }
+  const ensureContext = useCallback(async () => {
+    if (!ctxRef.current) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (!AudioCtx) throw Error('Web Audio API indisponível.')
+      const ctx = new AudioCtx()
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 128
+      analyser.smoothingTimeConstant = 0.78
+      const gain = ctx.createGain()
+      gain.gain.value = 0.8
+      analyser.connect(gain)
+      gain.connect(ctx.destination)
+      ctxRef.current = ctx
+      analyserRef.current = analyser
+      gainRef.current = gain
     }
-    if (ctxRef.current?.state === 'suspended') ctxRef.current.resume().catch(() => {})
-    return audioRef.current
+    if (ctxRef.current.state === 'suspended') await ctxRef.current.resume()
+    return ctxRef.current
   }, [])
 
-  const loadAndPlay = useCallback(async (track, reqId) => {
-    const el = ensureAudio()
-    let data = cacheRef.current.get(track.entry)
-    if (!data) {
-      data = await api.audioTrack(track.entry)
-      if (reqRef.current !== reqId) return
-      if (cacheRef.current.size > 32) cacheRef.current.clear()
-      cacheRef.current.set(track.entry, data)
+  const stopSource = useCallback(() => {
+    const src = sourceRef.current
+    if (!src) return
+    sourceRef.current = null
+    src.onended = null
+    try { src.stop() } catch { /* já encerrado */ }
+    try { src.disconnect() } catch { /* ignorar */ }
+  }, [])
+
+  const startBuffer = useCallback(async (audioBuffer, startOffset, onComplete) => {
+    const ctx = await ensureContext()
+    stopSource()
+    bufferRef.current = audioBuffer
+    const duration = audioBuffer.duration || 0
+    const safeOffset = clamp(startOffset, 0, Math.max(0, duration - 0.02))
+    const src = ctx.createBufferSource()
+    src.buffer = audioBuffer
+    src.connect(analyserRef.current)
+    sourceRef.current = src
+    offsetRef.current = safeOffset
+    startedAtRef.current = ctx.currentTime
+    src.onended = () => {
+      if (sourceRef.current !== src) return
+      sourceRef.current = null
+      offsetRef.current = duration
+      onComplete?.()
     }
-    el.src = data.url
-    el.currentTime = 0
-    try { await el.play() } catch { /* autoplay guard */ }
-    if (reqRef.current !== reqId) return
-    setState(cur => cur ? { ...cur, loading: false, playing: true, error: '', currentTime: 0, duration: data.duration || el.duration || 0 } : cur)
-  }, [api, ensureAudio])
+    src.start(0, safeOffset)
+    return duration
+  }, [ensureContext, stopSource])
+
+  const decodeTrack = useCallback(async (entry, data) => {
+    const cached = cacheRef.current.get(entry)
+    if (cached) return cached
+    const ctx = await ensureContext()
+    const arrayBuffer = dataUrlToArrayBuffer(data.url)
+    const decoded = await ctx.decodeAudioData(arrayBuffer)
+    if (cacheRef.current.size > 24) cacheRef.current.clear()
+    cacheRef.current.set(entry, decoded)
+    return decoded
+  }, [ensureContext])
+
+  const selectTrackRef = useRef(null)
+
+  const handleEnded = useCallback(() => {
+    const cur = stateRef.current
+    if (cur && cur.tracks.length > 1 && cur.index + 1 < cur.tracks.length) {
+      selectTrackRef.current?.(cur.index + 1)
+    } else {
+      setState(prev => prev ? { ...prev, playing: false, currentTime: prev.duration } : prev)
+    }
+  }, [])
 
   const selectTrack = useCallback(async index => {
     const cur = stateRef.current
     if (!cur || !cur.tracks.length) return
     const nextIdx = ((index % cur.tracks.length) + cur.tracks.length) % cur.tracks.length
     const reqId = ++reqRef.current
-    setState(prev => prev ? { ...prev, index: nextIdx, loading: true, error: '' } : prev)
-    try { await loadAndPlay(cur.tracks[nextIdx], reqId) }
-    catch (e) {
+    stopSource()
+    setState(prev => prev ? { ...prev, index: nextIdx, loading: true, playing: false, currentTime: 0, error: '' } : prev)
+    try {
+      const track = cur.tracks[nextIdx]
+      let audioBuffer = cacheRef.current.get(track.entry)
+      if (!audioBuffer) {
+        const data = await api.audioTrack(track.entry)
+        if (reqRef.current !== reqId) return
+        audioBuffer = await decodeTrack(track.entry, data)
+      }
       if (reqRef.current !== reqId) return
-      setState(prev => prev ? { ...prev, loading: false, playing: false, error: e.message || 'Falha ao carregar áudio.' } : prev)
+      const duration = await startBuffer(audioBuffer, 0, handleEnded)
+      if (reqRef.current !== reqId) return
+      setState(prev => prev ? { ...prev, loading: false, playing: true, currentTime: 0, duration, error: '' } : prev)
+    } catch (e) {
+      if (reqRef.current !== reqId) return
+      setState(prev => prev ? { ...prev, loading: false, playing: false, error: e.message || 'Falha ao reproduzir áudio.' } : prev)
     }
-  }, [loadAndPlay])
+  }, [api, decodeTrack, handleEnded, startBuffer, stopSource])
 
+  selectTrackRef.current = selectTrack
+
+  // Atualiza o relógio/scrubber suavemente enquanto o AudioBufferSourceNode toca
   useEffect(() => {
-    const el = audioRef.current
-    if (!el) return
-    const onTime = () => setState(cur => cur ? {
-      ...cur,
-      currentTime: el.currentTime || 0,
-      duration: Number.isFinite(el.duration) && el.duration > 0 ? el.duration : cur.duration,
-    } : cur)
-    const onPlay = () => setState(cur => cur ? { ...cur, playing: true } : cur)
-    const onPause = () => setState(cur => cur ? { ...cur, playing: false } : cur)
-    const onEnded = () => {
-      const cur = stateRef.current
-      if (cur && cur.tracks.length > 1 && cur.index + 1 < cur.tracks.length) selectTrack(cur.index + 1)
-      else setState(prev => prev ? { ...prev, playing: false, currentTime: prev.duration } : prev)
-    }
-    el.addEventListener('timeupdate', onTime)
-    el.addEventListener('loadedmetadata', onTime)
-    el.addEventListener('play', onPlay)
-    el.addEventListener('pause', onPause)
-    el.addEventListener('ended', onEnded)
-    return () => {
-      el.removeEventListener('timeupdate', onTime)
-      el.removeEventListener('loadedmetadata', onTime)
-      el.removeEventListener('play', onPlay)
-      el.removeEventListener('pause', onPause)
-      el.removeEventListener('ended', onEnded)
-    }
-  }, [state !== null, selectTrack])
+    if (!state?.playing) return
+    const timer = setInterval(() => {
+      const ctx = ctxRef.current
+      const buf = bufferRef.current
+      if (!ctx || !buf || !sourceRef.current) return
+      const elapsed = Math.min(buf.duration, offsetRef.current + (ctx.currentTime - startedAtRef.current))
+      setState(prev => prev && prev.playing ? { ...prev, currentTime: elapsed } : prev)
+    }, 80)
+    return () => clearInterval(timer)
+  }, [state?.playing])
 
   useEffect(() => () => {
-    audioRef.current?.pause()
+    stopSource()
     ctxRef.current?.close().catch(() => {})
-  }, [])
+  }, [stopSource])
 
   const open = useCallback(async (item, iconUrl = null) => {
     if (!api?.audioPreview || !item?.audio) return
     const cur = stateRef.current
-    if (cur && cur.itemId === item.id && !cur.error) {
-      const el = ensureAudio()
-      if (el.paused) {
-        if (el.ended || (el.duration && el.currentTime >= el.duration - 0.1)) el.currentTime = 0
-        el.play().catch(() => {})
-      } else el.pause()
+    if (cur && cur.itemId === item.id && !cur.error && !cur.loading) {
+      if (cur.playing) {
+        const ctx = ctxRef.current
+        if (ctx && bufferRef.current) {
+          offsetRef.current = Math.min(bufferRef.current.duration, offsetRef.current + (ctx.currentTime - startedAtRef.current))
+        }
+        stopSource()
+        setState(prev => prev ? { ...prev, playing: false, currentTime: offsetRef.current } : prev)
+      } else if (bufferRef.current) {
+        const nextOffset = offsetRef.current >= bufferRef.current.duration - 0.05 ? 0 : offsetRef.current
+        await startBuffer(bufferRef.current, nextOffset, handleEnded)
+        setState(prev => prev ? { ...prev, playing: true, currentTime: nextOffset } : prev)
+      }
       return
     }
     const reqId = ++reqRef.current
-    const el = ensureAudio()
-    el.pause()
+    stopSource()
+    bufferRef.current = null
+    offsetRef.current = 0
     setState({
       itemId: item.id,
       name: item.name,
@@ -400,54 +451,69 @@ export function useAudioPreview(api) {
       error: '',
     })
     try {
+      await ensureContext()
       const res = await api.audioPreview(item.audio)
       if (reqRef.current !== reqId) return
       if (!res?.tracks?.length || !res.initial) {
         setState(prev => prev ? { ...prev, loading: false, error: res?.reason || 'Sem prévia disponível.' } : prev)
         return
       }
-      if (cacheRef.current.size > 32) cacheRef.current.clear()
-      cacheRef.current.set(res.initial.entry, res.initial)
+      const audioBuffer = await decodeTrack(res.initial.entry, res.initial)
+      if (reqRef.current !== reqId) return
       const startIndex = res.initialIndex || 0
+      const duration = await startBuffer(audioBuffer, 0, handleEnded)
+      if (reqRef.current !== reqId) return
       setState(prev => prev ? {
         ...prev,
         tracks: res.tracks,
         index: startIndex,
         loading: false,
-        duration: res.initial.duration || 0,
+        playing: true,
+        currentTime: 0,
+        duration: duration || res.initial.duration || 0,
       } : prev)
-      el.src = res.initial.url
-      el.currentTime = 0
-      await el.play().catch(() => {})
-      if (reqRef.current === reqId) setState(prev => prev ? { ...prev, playing: !el.paused } : prev)
     } catch (e) {
       if (reqRef.current !== reqId) return
-      setState(prev => prev ? { ...prev, loading: false, error: e.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '') } : prev)
+      setState(prev => prev ? { ...prev, loading: false, playing: false, error: e.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '') } : prev)
     }
-  }, [api, ensureAudio])
+  }, [api, decodeTrack, ensureContext, handleEnded, startBuffer, stopSource])
 
-  const togglePlay = useCallback(() => {
-    const el = audioRef.current
-    if (!el || !el.src) return
-    if (ctxRef.current?.state === 'suspended') ctxRef.current.resume().catch(() => {})
-    if (el.paused) {
-      if (el.ended || (el.duration && el.currentTime >= el.duration - 0.1)) el.currentTime = 0
-      el.play().catch(() => {})
-    } else el.pause()
-  }, [])
+  const togglePlay = useCallback(async () => {
+    const cur = stateRef.current
+    if (!cur || cur.loading || !bufferRef.current) return
+    if (cur.playing) {
+      const ctx = ctxRef.current
+      if (ctx) offsetRef.current = Math.min(bufferRef.current.duration, offsetRef.current + (ctx.currentTime - startedAtRef.current))
+      stopSource()
+      setState(prev => prev ? { ...prev, playing: false, currentTime: offsetRef.current } : prev)
+    } else {
+      const nextOffset = offsetRef.current >= bufferRef.current.duration - 0.05 ? 0 : offsetRef.current
+      try {
+        await startBuffer(bufferRef.current, nextOffset, handleEnded)
+        setState(prev => prev ? { ...prev, playing: true, currentTime: nextOffset } : prev)
+      } catch (e) {
+        setState(prev => prev ? { ...prev, playing: false, error: e.message || 'Falha ao reproduzir.' } : prev)
+      }
+    }
+  }, [handleEnded, startBuffer, stopSource])
 
-  const seek = useCallback(fraction => {
-    const el = audioRef.current
-    if (!el || !Number.isFinite(el.duration) || el.duration <= 0) return
-    el.currentTime = clamp(fraction) * el.duration
-    setState(prev => prev ? { ...prev, currentTime: el.currentTime } : prev)
-  }, [])
+  const seek = useCallback(async fraction => {
+    const buf = bufferRef.current
+    if (!buf || !buf.duration) return
+    const nextOffset = clamp(fraction) * buf.duration
+    offsetRef.current = nextOffset
+    if (stateRef.current?.playing) {
+      await startBuffer(buf, nextOffset, handleEnded)
+    }
+    setState(prev => prev ? { ...prev, currentTime: nextOffset } : prev)
+  }, [handleEnded, startBuffer])
 
   const close = useCallback(() => {
     reqRef.current++
-    audioRef.current?.pause()
+    stopSource()
+    bufferRef.current = null
     setState(null)
-  }, [])
+  }, [stopSource])
 
   return { state, analyserRef, open, togglePlay, selectTrack, seek, close }
 }

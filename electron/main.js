@@ -244,7 +244,7 @@ else {
   app.on('second-instance', () => { window?.restore(); window?.focus() })
   app.whenReady().then(() => {
     window = new BrowserWindow({
-      width: 1370, height: 850, minWidth: 880, minHeight: 620, backgroundColor: '#101315',
+      width: 1370, height: 850, minWidth: 880, minHeight: 620, backgroundColor: '#000000',
       autoHideMenuBar: true, title: 'Dota 2 Local Skin Changer',
       webPreferences: { preload: path.join(here, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
     })
