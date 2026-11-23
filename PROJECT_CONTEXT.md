@@ -114,3 +114,10 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - Verificação: `npm run build:renderer` e `npm test` (23 testes, incluindo teste unitário de `decodeVsnd`, catálogo de áudio e `createAudioReader`) passaram. `build:exe` não executado; sem tag.
 
 - Correção na reprodução de áudio: `index.html` não possuía `media-src data: blob:` na CSP (bloqueando `data:audio/...`), e `useAudioPreview` foi migrado para Web Audio API pura (`AudioContext.decodeAudioData` → `AudioBufferSourceNode` → `AnalyserNode` → `GainNode`), evitando bloqueio de origem opaca `file://` e mantendo o waveform reativo em tempo real. `decodeVsnd` validado byte a byte igual ao `Source2Viewer-CLI.exe` em `announcer_anc_attack_rad_03.vsnd_c`. Fundo inicial da janela em `electron/main.js` ajustado para `#000000`.
+
+## Versão 1.4.0 · Apple Glass OLED, Motion UI e Prévia de Áudio NotebookLM
+
+- Versão atualizada para `1.4.0` em `package.json` e `package-lock.json`.
+- Validação completa pelo usuário no aplicativo: visual Apple Glass (modo escuro OLED preto + modo claro), navegação segmentada no topo, carregamento estilo Gemini Image Studio e prévia de áudio estilo NotebookLM tocando perfeitamente via Web Audio API.
+- `npm test` passou (23/23 testes) e `npm run build:exe` gerou o instalador NSIS `Dota-2-Local-Skin-Changer-Setup.exe` na raiz.
+- Commit enviado para `main` e tag `v1.4.0` publicada no GitHub para disparar a Release privada.
