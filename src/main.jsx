@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
+import './glass.css'
+import { AnimatePresence, motion, MotionConfig } from 'motion/react'
 import dotaLogo from './dota-logo.png'
 import { version } from '../package.json'
 import { Catalog } from './Catalog.jsx'
@@ -22,6 +24,11 @@ const selectionKey = choices => JSON.stringify(choices.map(({ hero, slot, itemId
   JSON.stringify([hero, slot, String(itemId), styleId == null ? null : String(styleId)])).sort())
 const emptySelection = selectionKey([])
 
+const page = {
+  initial: { opacity: 0, y: 14, scale: .985, filter: 'blur(10px)' },
+  animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transition: { type: 'spring', stiffness: 260, damping: 28 } },
+  exit: { opacity: 0, y: -8, filter: 'blur(8px)', transition: { duration: .14 } },
+}
 function App() {
   const [root, setRoot] = useState('')
   const [catalog, setCatalog] = useState(null)
@@ -181,6 +188,7 @@ function App() {
       <nav aria-label="Navegação principal">
         {Object.entries(pages).map(([id, [name, icon]]) => <button key={id} type="button" onClick={() => changeTab(id)}
           aria-label={name} aria-current={tab === id ? 'page' : undefined} title={name}>
+          {tab === id && <motion.span layoutId="nav-pill" className="nav-pill" transition={{ type: 'spring', stiffness: 420, damping: 34 }}/>}
           <Icon name={icon}/><span>{name}</span>
         </button>)}
       </nav>
@@ -214,7 +222,8 @@ function App() {
         onShowEmpty={setEmptyHeroSlots} onSlot={setActiveSlot} onStyle={chooseItem} onEquipSet={equipSet} onClear={clearHero} onBack={() => setHero('')}/>}
       {tab === 'catalog' && pickerSlot && <ItemPicker key={owner.id} owner={owner} slots={pickerSlots} slot={pickerSlot} selected={selected}
         busy={Boolean(busy)} onSlot={setActiveSlot} onChange={(itemId, styleId) => chooseItem(pickerSlot.id, itemId, styleId)} onClose={() => setActiveSlot(null)}/>}
-      {tab === 'presets' && <Presets owners={owners} choices={choices} presets={presets} presetName={presetName}
+      <AnimatePresence mode="wait" initial={false}>
+      {tab === 'presets' && <motion.div key="presets" {...page}><Presets owners={owners} choices={choices} presets={presets} presetName={presetName}
         setPresetName={setPresetName} store={store} busy={Boolean(busy)} onLoad={loadPack}
         onRemove={choice => setChoices(current => current.filter(entry => entry !== choice))}
         onSave={() => job('Salvando…', async () => {
@@ -226,8 +235,8 @@ function App() {
         onImport={() => job('Importando…', async () => {
           const result = await api.importPack()
           if (result) { setPresets(result.presets); loadPack(result.preset) }
-        })}/>}
-      {tab === 'settings' && <Settings gamePath={gamePath} root={root} cli={cli} bundledCli={bundledCli} store={store} log={log} report={report}
+        })}/></motion.div>}
+      {tab === 'settings' && <motion.div key="settings" {...page}><Settings gamePath={gamePath} root={root} cli={cli} bundledCli={bundledCli} store={store} log={log} report={report}
         busy={Boolean(busy)} canApply={canApply} onChooseRoot={chooseRoot} onScan={() => job('Atualizando catálogo…', scan)}
         cacheStatus={cacheStatus} onIndexIcons={() => api.indexIcons()}
         onChooseCli={() => job('Selecionando CLI…', async () => { const next = await api.chooseCli(); if (next !== cli) setBundledCli(false); setCli(next) })}
@@ -242,12 +251,13 @@ function App() {
             setAppliedSelection(emptySelection); setReport(null)
             setMessage('Backup restaurado e mods limpos.' + (result.preserved ? ' VPK anterior em ' + result.preserved : ''))
           }
-        })}/>}
+        })}/></motion.div>}
+      </AnimatePresence>
     </main>
 
     <footer className="statusbar">
       <div className="operation-status" role="status" title={[statusText, gamePath].filter(Boolean).join(' • ')}>
-        <span className={error ? 'error' : ''}>{statusText}</span>
+        <AnimatePresence mode="popLayout" initial={false}><motion.span key={statusText} className={error ? 'error' : ''} initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }} transition={{ type: 'spring', stiffness: 380, damping: 32 }} style={{ display: 'inline-block' }}>{statusText}</motion.span></AnimatePresence>
         <span className="game-location">{gamePath ? ' • Dota 2 - ' + gamePath : ' • Pasta do Dota 2 não selecionada'}</span>
       </div>
       <div className="release-status">
@@ -259,4 +269,4 @@ function App() {
     </footer>
   </div>
 }
-createRoot(document.getElementById('root')).render(<App/>)
+createRoot(document.getElementById('root')).render(<MotionConfig reducedMotion="user"><App/></MotionConfig>)

@@ -93,3 +93,11 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - `install.js`: assinaturas gravadas após os `gameinfo` (dentro da transação, com reversão em falha); `restoreGame` as restaura. `electron/main.js` bloqueia apply/restore/recover com o Dota 2 aberto. `diagnostics.js` ganhou o check `dota.signatures`. Configurações exibe o aviso.
 - Não usar o `FixMatchMaking.bat` de terceiros: ele baixa um `gameinfo_branchspecific.gi` externo e cria a pasta `Dota2SkinChanger`.
 - Verificação e publicação: 22 testes passaram (`npm test`), `npm run build:exe` gerou `Dota-2-Local-Skin-Changer-Setup.exe`, o usuário confirmou no jogo que o bloqueio do VAC foi resolvido e a tag `v1.3.1` foi enviada ao GitHub para disparar a Release privada.
+
+## Visual dark glass (pós-1.3.1)
+
+- Paleta preto/cinza neutro com acento vermelho #ff453a (style.css recolorido; raridades mantêm as cores do jogo). src/glass.css (importado após style.css) define vidro com ackdrop-filter, cantos de 12–26 px, curvas de mola (linear()), brilho ambiente vermelho, varredura (sweep) no botão Jogar, elevação em cartões e sheet do ItemPicker com mola e desfoque.
+- Dependência motion (motion/react): pílula ativa da barra lateral com layoutId, transição blur+mola entre Predefinições e Configurações, troca animada do texto de status e MotionConfig reducedMotion="user".
+- Verificação: uild:renderer e 
+pm test passam. Aparência ainda não conferida visualmente no Electron; uild:exe não executado.
+

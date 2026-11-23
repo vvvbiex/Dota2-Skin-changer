@@ -1,0 +1,123 @@
+/* Dark glass minimalista (preto, vermelho, cinza). Carregado depois de style.css. */
+:root {
+  --canvas: #060608;
+  --surface: rgba(255, 255, 255, .045);
+  --raised: rgba(255, 255, 255, .085);
+  --border: rgba(255, 255, 255, .09);
+  --accent: #ff453a;
+  --accent-text: #ff8a80;
+  --accent-tint: rgba(255, 69, 58, .16);
+  --glass: rgba(24, 24, 28, .62);
+  --glass-strong: rgba(18, 18, 22, .78);
+  --radius: 18px;
+  --radius-sm: 12px;
+  /* Curvas de mola parecidas com as do iOS */
+  --spring: linear(0, .24 4%, .62 9%, .87 14%, 1.02 20%, 1.06 25%, 1.04 31%, 1.01 40%, .998 55%, 1);
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --feedback-time: 220ms;
+}
+html, body { background: var(--canvas); }
+body { -webkit-font-smoothing: antialiased; }
+
+/* Fundo ambiente: brilho vermelho muito sutil */
+.shell {
+  background:
+    radial-gradient(60% 50% at 85% -10%, rgba(255, 69, 58, .16), transparent 70%),
+    radial-gradient(45% 40% at 0% 100%, rgba(255, 69, 58, .07), transparent 70%),
+    var(--canvas);
+}
+.workspace { background: transparent; }
+
+/* Superfícies de vidro */
+.sidebar, .topbar, .statusbar {
+  background: var(--glass);
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  border-color: var(--border);
+}
+.sidebar { margin: 10px 0 10px 10px; border: 1px solid var(--border); border-radius: 22px; grid-area: 1 / 1 / 4 / 2; }
+.topbar { margin: 10px 10px 0 12px; border: 1px solid var(--border); border-radius: 20px; padding-inline: 20px; }
+.statusbar { margin: 0 10px 10px 12px; border: 1px solid var(--border); border-radius: 16px; }
+.shell { grid-template-rows: 74px minmax(0, 1fr) auto; }
+.panel, dialog.picker-panel {
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 20px 50px -24px rgba(0, 0, 0, .8);
+}
+dialog.picker-panel { border-radius: 26px; background: var(--glass-strong); }
+dialog.picker-panel::backdrop { background: rgba(0, 0, 0, .5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+
+/* Controles */
+button, input:not([type=checkbox]), select { border-radius: var(--radius-sm); background: var(--surface); }
+button { transition: transform .45s var(--spring), background-color .2s, border-color .2s, box-shadow .25s, color .2s; }
+button:active:not(:disabled) { transform: scale(.955); transition-duration: .08s; }
+@media (hover: hover) {
+  button:hover:not(:disabled) { border-color: rgba(255, 69, 58, .45); background-color: var(--raised); }
+}
+.search-field, .segments { border-radius: 14px; background: var(--surface); }
+.segments button, .sidebar button { border-radius: 10px; }
+.icon-button { border-radius: 50%; }
+button.primary { background: linear-gradient(180deg, #ff5a4f, #e0352b); color: #fff; border-color: transparent; box-shadow: 0 8px 24px -10px rgba(255, 69, 58, .8); }
+@media (hover: hover) { button.primary:hover:not(:disabled) { background: linear-gradient(180deg, #ff6e64, #ea4036); } }
+:focus-visible { outline-color: rgba(255, 69, 58, .8); outline-offset: 2px; }
+
+/* Barra lateral: pílula ativa animada (layoutId) */
+.sidebar button { position: relative; isolation: isolate; box-shadow: none !important; background: transparent !important; border-color: transparent !important; }
+.sidebar button[aria-current=page] { color: #fff; background: transparent !important; }
+.nav-pill {
+  position: absolute; inset: 0; z-index: -1; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 69, 58, .30), rgba(255, 69, 58, .14));
+  border: 1px solid rgba(255, 69, 58, .35);
+  box-shadow: 0 6px 20px -8px rgba(255, 69, 58, .6);
+}
+
+/* Botão Jogar: brilho em varredura (sweep) */
+.header-actions .play {
+  position: relative; overflow: hidden; border-radius: 14px; color: #fff; border-color: rgba(255, 255, 255, .14);
+  background: linear-gradient(180deg, #ff5a4f, #d92e25); box-shadow: 0 10px 28px -12px rgba(255, 69, 58, .9);
+}
+.header-actions .play::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-120%);
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%);
+  animation: sweep 3.8s ease-in-out infinite;
+}
+.header-actions .play:disabled::after { animation: none; }
+@keyframes sweep { 0%, 55% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+@media (hover: hover) { .play:hover:not(:disabled) { box-shadow: 0 12px 34px -10px rgba(255, 69, 58, 1); } }
+
+/* Cartões e itens: elevação com mola */
+.item-tile, .hero-card, .slot-card, .set-card, article.panel {
+  border-radius: var(--radius);
+  transition: transform .5s var(--spring), border-color .2s, background-color .2s, box-shadow .3s;
+}
+@media (hover: hover) {
+  .item-tile:hover:not(:disabled), .hero-card:hover, .slot-card:hover, .set-card:hover { transform: translateY(-3px) scale(1.012); box-shadow: 0 18px 36px -18px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 69, 58, .25); }
+}
+.item-tile:active:not(:disabled) { transform: scale(.97); }
+.tile-art { border-radius: calc(var(--radius) - 4px); overflow: hidden; }
+[data-equipped=true] .item-tile, .item-tile[aria-pressed=true] { border-color: rgba(255, 69, 58, .55); box-shadow: 0 0 0 1px rgba(255, 69, 58, .35), 0 12px 30px -14px rgba(255, 69, 58, .55); }
+
+/* Entrada com blur (estilo Wabi) e sheet com mola (estilo Plasma) */
+.view-entry { animation: blur-reveal .6s var(--ease-out) both; }
+@keyframes blur-reveal { from { opacity: 0; filter: blur(10px); transform: translateY(10px) scale(.992); } }
+dialog.picker-panel[open] { animation: sheet-in .7s var(--spring) both; }
+dialog.picker-panel[open]::backdrop { animation: fade-in .4s ease both; }
+dialog.picker-panel[data-closing=true] { animation: sheet-out .22s cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(40px) scale(.96); filter: blur(8px); } }
+@keyframes sheet-out { to { opacity: 0; transform: translateY(24px) scale(.97); filter: blur(6px); } }
+@keyframes fade-in { from { opacity: 0; } }
+
+/* Barra de status e contadores */
+.operation-status > span:first-child { color: #f2f2f4; }
+progress { accent-color: var(--accent); }
+.empty-state > svg { color: var(--accent); }
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .16); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  .header-actions .play::after { animation: none; }
+  dialog.picker-panel[open], .view-entry { animation: none; }
+}
