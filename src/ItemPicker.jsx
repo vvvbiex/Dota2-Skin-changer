@@ -1,10 +1,13 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DefaultArt, defaultImage, ItemArt, rarityKey, rarityNames, rarityOrder, StyleOptions, useIcons } from './ItemArt.jsx'
+import { SegmentedControl } from './MotionUI.jsx'
 import { fold, globalName, Icon, Search, slotGlyph, slotName } from './ui.jsx'
 
 const pageSize = 24
 const sortOptions = [
-  ['rare-first', 'Por raridade'], ['common-first', 'Mais comum → Mais rara'], ['name', 'Nome A–Z'],
+  { id: 'rare-first', label: 'Por raridade' },
+  { id: 'common-first', label: 'Mais comum → Mais rara' },
+  { id: 'name', label: 'Nome A–Z' },
 ]
 const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' })
 const rank = rarity => {
@@ -81,10 +84,8 @@ export function ItemPicker({ owner, slots, slot, selected, busy, onSlot, onChang
     </div>
     <div className="picker-controls">
       <Search label="Buscar item" value={query} autoFocus onChange={value => { setQuery(value); setPage(0) }}/>
-      <div className="segments picker-sort" role="group" aria-label="Ordenar por">
-        {sortOptions.map(([id, label]) => <button key={id} type="button" aria-pressed={sort === id}
-          onClick={() => { setSort(id); setPage(0) }}>{label}</button>)}
-      </div>
+      <SegmentedControl label="Ordenar por" layoutId="picker-sort" className="segments picker-sort"
+        options={sortOptions} value={sort} onChange={id => { setSort(id); setPage(0) }}/>
       <span className="item-count" aria-live="polite">{matching.length} {matching.length === 1 ? 'item' : 'itens'}</span>
     </div>
     {slot.reason && <p className="picker-note">{slot.reason}</p>}

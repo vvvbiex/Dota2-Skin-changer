@@ -11,13 +11,17 @@ import { ItemPicker } from './ItemPicker.jsx'
 import { isIndexingIcons, useAttributeIcons } from './ItemArt.jsx'
 import { Presets } from './Presets.jsx'
 import { Settings } from './Settings.jsx'
+import { ApplyStudioOverlay, SegmentedControl, ThemeSwitcher } from './MotionUI.jsx'
 import { attributes, compareGlobalSlots, compareHeroSlots, Icon, isGlobalVisible } from './ui.jsx'
 
 const api = window.arsenal
-const pages = {
-  catalog: ['Catálogo', 'catalog'],
-  presets: ['Predefinições', 'pack'],
-  settings: ['Configurações', 'settings'],
+const navOptions = [
+  { id: 'catalog', label: 'Catálogo', icon: 'catalog' },
+  { id: 'presets', label: 'Predefinições', icon: 'pack' },
+  { id: 'settings', label: 'Configurações', icon: 'settings' },
+]
+const readTheme = () => {
+  try { return localStorage.getItem('dota-local-skins-theme') === 'light' ? 'light' : 'dark' } catch { return 'dark' }
 }
 
 const selectionKey = choices => JSON.stringify(choices.map(({ hero, slot, itemId, styleId }) =>
@@ -34,7 +38,8 @@ function App() {
   const [catalog, setCatalog] = useState(null)
   const [heroId, setHero] = useState('')
   const [tab, setTab] = useState('catalog')
-  const [collapsed, setCollapsed] = useState(false)
+  const [theme, setTheme] = useState(readTheme)
+  const [studio, setStudio] = useState(null)
   const [choices, setChoices] = useState([])
   const [appliedSelection, setAppliedSelection] = useState(emptySelection)
   const [presets, setPresets] = useState([])
@@ -54,6 +59,7 @@ function App() {
   const content = useRef(null)
   const running = useRef(false)
   const catalogScroll = useRef(0)
+  const studioTimer = useRef(null)
   const hero = catalog?.heroes.find(owner => owner.id === heroId)
   const owner = hero || catalog?.global
   const owners = useMemo(() => catalog ? [...catalog.heroes, catalog.global] : [], [catalog])
@@ -83,15 +89,36 @@ function App() {
   const statusText = busy || message || (pending ? 'Alterações pendentes' : 'Pronto')
 
   useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.documentElement.style.colorScheme = theme
+    try { localStorage.setItem('dota-local-skins-theme', theme) } catch { /* ignore */ }
+  }, [theme])
+  useLayoutEffect(() => {
     content.current.scrollTop = tab === 'catalog' && !heroId ? catalogScroll.current : 0
   }, [tab, heroId])
   useEffect(() => api?.onIconProgress(setCacheStatus), [])
+  useEffect(() => () => clearTimeout(studioTimer.current), [])
+
+  function openStudio(next) {
+    clearTimeout(studioTimer.current)
+    setStudio(next)
+  }
+  function finishStudio(title, doneDetail, holdMs = 1350) {
+    clearTimeout(studioTimer.current)
+    setStudio({ title, stage: 'Concluído', phase: 'done', doneDetail })
+    studioTimer.current = setTimeout(() => setStudio(null), holdMs)
+  }
+  function closeStudio() {
+    clearTimeout(studioTimer.current)
+    setStudio(null)
+  }
 
   async function job(label, fn) {
     if (running.current) return
     running.current = true
     setBusy(label); setMessage(''); setError(false)
     try { await fn() } catch (e) {
+      closeStudio()
       setError(true); setMessage(e.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''))
     } finally { running.current = false; setBusy('') }
   }
@@ -151,11 +178,20 @@ function App() {
     })
   }
   function applyMods(force = false, playAfter = false) {
-    job(choices.length ? 'Gerando VPK…' : 'Restaurando itens padrão…', async () => {
-      if (choices.length) {
+    const hasChoices = choices.length > 0
+    const title = hasChoices ? 'Aplicando skins no Dota 2' : 'Restaurando jogo original'
+    job(hasChoices ? 'Gerando VPK…' : 'Restaurando itens padrão…', async () => {
+      openStudio({
+        title,
+        stage: hasChoices ? 'Gerando VPK e assinando dota.signatures…' : 'Removendo mods e restaurando backups…',
+        phase: 'working',
+        doneDetail: '',
+      })
+      if (hasChoices) {
         const result = await api.apply(choices, force)
         setReport(result)
         if (!result.ok) {
+          closeStudio()
           changeTab('settings'); setError(true)
           setMessage(result.checks?.find(check => !check.ok)?.detail || 'Falha na verificação. Consulte o diagnóstico.')
           return
@@ -167,11 +203,14 @@ function App() {
       setAppliedSelection(currentSelection)
       if (playAfter) {
         setBusy('Abrindo Steam…')
+        openStudio({ title: 'Iniciando Dota 2', stage: 'Abrindo Steam…', phase: 'launching', doneDetail: '' })
         await api.play()
-        setMessage(choices.length ? '✓ Operação bem-sucedida • Mods aplicados com sucesso!' : 'Itens padrão restaurados. Solicitação enviada à Steam.')
+        finishStudio('Dota 2 iniciado', hasChoices ? 'VPK e dota.signatures prontos · Steam aberta' : 'Jogo original restaurado · Steam aberta', 1500)
+        setMessage(hasChoices ? '✓ Operação bem-sucedida • Mods aplicados com sucesso!' : 'Itens padrão restaurados. Solicitação enviada à Steam.')
       } else {
+        finishStudio(hasChoices ? 'Skins aplicadas' : 'Jogo restaurado', hasChoices ? 'pak01_dir.vpk e dota.signatures validados' : 'Arquivos originais restaurados', 1350)
         changeTab('settings')
-        setMessage(choices.length ? '✓ Operação bem-sucedida • Mods aplicados com sucesso!' : 'Itens padrão restaurados.')
+        setMessage(hasChoices ? '✓ Operação bem-sucedida • Mods aplicados com sucesso!' : 'Itens padrão restaurados.')
       }
     })
   }
@@ -180,33 +219,23 @@ function App() {
     setMessage('Predefinição carregada na seleção atual.')
   }
 
-  return <div className="shell" data-collapsed={collapsed}>
-    <aside className="sidebar">
+  return <div className="shell">
+    <header className="topbar">
       <div className="brand"><img className="brand-icon" src={dotaLogo} alt="Dota 2"/>
         <span className="brand-text"><strong>Dota 2</strong><small>Local Skin Changer</small></span>
       </div>
-      <nav aria-label="Navegação principal">
-        {Object.entries(pages).map(([id, [name, icon]]) => <button key={id} type="button" onClick={() => changeTab(id)}
-          aria-label={name} aria-current={tab === id ? 'page' : undefined} title={name}>
-          {tab === id && <motion.span layoutId="nav-pill" className="nav-pill" transition={{ type: 'spring', stiffness: 420, damping: 34 }}/>}
-          <Icon name={icon}/><span>{name}</span>
-        </button>)}
-      </nav>
-      <button type="button" className="collapse-button" aria-expanded={!collapsed}
-        aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-        title={collapsed ? 'Expandir menu' : 'Recolher menu'} onClick={() => setCollapsed(value => !value)}>
-        <Icon name="collapse"/><span>{collapsed ? 'Expandir menu' : 'Recolher menu'}</span>
-      </button>
-    </aside>
-
-    <header className="topbar">
-      <h1>{pages[tab][0]}</h1>
+      <SegmentedControl nav label="Navegação principal" layoutId="main-nav" className="main-nav"
+        options={navOptions} value={tab} onChange={changeTab}/>
       <div className="header-actions">
+        <ThemeSwitcher theme={theme} onToggle={() => setTheme(cur => cur === 'dark' ? 'light' : 'dark')}/>
         <button type="button" disabled={!canApply} onClick={() => applyMods()}><Icon name="download"/> Aplicar</button>
         <button type="button" className="play" disabled={!!busy || !api} onClick={() => {
           if (pending) applyMods(false, true)
           else job('Abrindo Steam…', async () => {
-            await api.play(); setMessage('Solicitação enviada à Steam.')
+            openStudio({ title: 'Iniciando Dota 2', stage: 'Abrindo Steam…', phase: 'launching', doneDetail: '' })
+            await api.play()
+            finishStudio('Dota 2 iniciado', 'Solicitação enviada à Steam', 1200)
+            setMessage('Solicitação enviada à Steam.')
           })
         }}><span aria-hidden="true">▶</span>{pending ? 'Aplicar e Jogar' : 'Jogar'}</button>
       </div>
@@ -243,12 +272,16 @@ function App() {
         onDiagnose={() => job('Verificando arquivos…', async () => setReport(await api.diagnose()))}
         onForceApply={() => applyMods(true)}
         onRestore={() => job('Restaurando…', async () => {
-          await api.restore(); setAppliedSelection(emptySelection); setReport(null); setMessage('Jogo restaurado. Predefinições preservadas.')
+          openStudio({ title: 'Restaurando jogo original', stage: 'Removendo mods e restaurando dota.signatures…', phase: 'working', doneDetail: '' })
+          await api.restore(); setAppliedSelection(emptySelection); setReport(null)
+          finishStudio('Jogo restaurado', 'gameinfo.gi e dota.signatures originais', 1350)
+          setMessage('Jogo restaurado. Predefinições preservadas.')
         })}
         onRecover={() => job('Recuperando…', async () => {
           const result = await api.recover()
           if (result) {
             setAppliedSelection(emptySelection); setReport(null)
+            finishStudio('Backup recuperado', 'Arquivos originais restaurados', 1350)
             setMessage('Backup restaurado e mods limpos.' + (result.preserved ? ' VPK anterior em ' + result.preserved : ''))
           }
         })}/></motion.div>}
@@ -267,6 +300,7 @@ function App() {
         <span> • {savedPreset ? 'Pré-definição salva' : 'v' + version}</span>
       </div>
     </footer>
+    <ApplyStudioOverlay state={studio} theme={theme} onDismiss={closeStudio}/>
   </div>
 }
 createRoot(document.getElementById('root')).render(<MotionConfig reducedMotion="user"><App/></MotionConfig>)

@@ -94,10 +94,12 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - Não usar o `FixMatchMaking.bat` de terceiros: ele baixa um `gameinfo_branchspecific.gi` externo e cria a pasta `Dota2SkinChanger`.
 - Verificação e publicação: 22 testes passaram (`npm test`), `npm run build:exe` gerou `Dota-2-Local-Skin-Changer-Setup.exe`, o usuário confirmou no jogo que o bloqueio do VAC foi resolvido e a tag `v1.3.1` foi enviada ao GitHub para disparar a Release privada.
 
-## Visual dark glass (pós-1.3.1)
+## Visual Apple Glass e Motion UI (pós-1.3.1)
 
-- Paleta preto/cinza neutro com acento vermelho #ff453a (style.css recolorido; raridades mantêm as cores do jogo). src/glass.css (importado após style.css) define vidro com ackdrop-filter, cantos de 12–26 px, curvas de mola (linear()), brilho ambiente vermelho, varredura (sweep) no botão Jogar, elevação em cartões e sheet do ItemPicker com mola e desfoque.
-- Dependência motion (motion/react): pílula ativa da barra lateral com layoutId, transição blur+mola entre Predefinições e Configurações, troca animada do texto de status e MotionConfig reducedMotion="user".
-- Verificação: uild:renderer e 
-pm test passam. Aparência ainda não conferida visualmente no Electron; uild:exe não executado.
-
+- Paleta escura (preto/cinza neutro com acento vermelho `#ff453a`) e tema claro (`[data-theme="light"]`, Apple light glass `#f5f5f7` com acento `#ff3b30` e superfícies translúcidas), persistido em `localStorage` (`dota-local-skins-theme`). Raridades mantêm as cores do jogo com contraste adaptado nos dois temas.
+- `src/glass.css` (importado após `style.css`) substitui a barra lateral por layout minimalista em coluna única com barra superior flutuante (`backdrop-filter`, cantos de 12–26 px, curvas de mola `linear()`, brilho ambiente vermelho, varredura no botão Jogar e sheet do `ItemPicker` com mola e desfoque).
+- `src/MotionUI.jsx` (`motion/react`):
+  - `SegmentedControl` (baseado em `Segmented Navigation Control.html`): navegação principal (`Catálogo`, `Predefinições`, `Configurações`) centralizada no topo e controles segmentados internos (`Catalog.jsx` e `ItemPicker.jsx`) com pílula deslizante por mola (`layoutId`).
+  - `ThemeSwitcher` (baseado em `Day & Night Theme Switcher.html`): ícone Sol ↔ Lua com rotação/escala e trilho com thumb de mola e alongamento horizontal (`scaleX`) ao alternar.
+  - `ApplyStudioOverlay` (baseado em `gemini-image.html`): overlay flutuante de carregamento ao aplicar skins, restaurar o jogo ou abrir a Steam — estrela de 4 pontas rotativa, mosaico 6×6 embaralhado com varredura luminosa revelando o logo do Dota 2, texto com shimmer letra a letra, odômetro de porcentagem (`0%` → `100%`), barra deslizante por `translateX` e morph para checkmark animado ("Pronto").
+- Verificação: `npm run build:renderer` e `npm test` (22 testes) passaram. `build:exe` não executado; aparência ainda pendente de conferência no Electron (`npm start`). Próxima etapa planejada: prévia de áudio (`notebooklm.html`) com extração sob demanda de `.vsnd_c` via `Source2Viewer-CLI.exe`.

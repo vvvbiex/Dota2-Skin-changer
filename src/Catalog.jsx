@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { AttributeArt, ItemArt, rarityKey, useIcons } from './ItemArt.jsx'
+import { SegmentedControl } from './MotionUI.jsx'
 import { attributes, compareGlobalSlots, fold, globalName, Icon, isGlobalVisible, Portrait, Search, slotGlyph } from './ui.jsx'
 
 const views = [['all', 'Todos'], ['heroes', 'Heróis'], ['globals', 'Globais']]
@@ -7,19 +8,17 @@ const filters = [['all', 'Todos'], ['changed', 'Alterados'], ['unchanged', 'Sem 
 const filterRows = (rows, filter, changed) => rows.filter(row =>
   filter === 'all' || changed.has(row.id) === (filter === 'changed'))
 
-function Segments({ label, options, counts, value, onChange, className = '' }) {
-  return <div className={'segments ' + className} role="group" aria-label={label}>
-    {options.map(([id, name]) => <button key={id} type="button" aria-pressed={id === value} onClick={() => onChange(id)}>
-      {name}<span className="segment-count">{counts[id]}</span>
-    </button>)}
-  </div>
+function Segments({ label, options, counts, value, onChange, className = '', layoutId }) {
+  const mapped = options.map(([id, name]) => ({ id, label: name, count: counts[id] }))
+  return <SegmentedControl label={label} options={mapped} value={value} onChange={onChange}
+    layoutId={layoutId} className={'segments ' + className}/>
 }
 
 function SectionControls({ title, rows, changed, filter, setFilter }) {
   const count = rows.filter(row => changed.has(row.id)).length
   return <div className="section-bar">
     <h2>{title}</h2>
-    <Segments label={'Filtrar ' + title.toLowerCase()} options={filters} value={filter} onChange={setFilter}
+    <Segments label={'Filtrar ' + title.toLowerCase()} layoutId={'filter-' + title} options={filters} value={filter} onChange={setFilter}
       counts={{ all: rows.length, changed: count, unchanged: rows.length - count }}/>
   </div>
 }
@@ -72,7 +71,7 @@ export function Catalog({ catalog, attributeIcons, choices, busy, cli, emptyGlob
   return <>
     <div className="catalog-toolbar">
       <Search label="Buscar no catálogo" value={query} onChange={setQuery}/>
-      <Segments label="Seções do catálogo" className="catalog-segments" options={views}
+      <Segments label="Seções do catálogo" layoutId="catalog-views" className="catalog-segments" options={views}
         value={view} onChange={setView} counts={{ all: heroes.length + globals.length, heroes: heroes.length, globals: globals.length }}/>
     </div>
     {view !== 'globals' && <section className="catalog-section view-entry" aria-label="Heróis">
