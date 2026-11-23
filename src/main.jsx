@@ -35,6 +35,7 @@ function App() {
   const [store, setStore] = useState('')
   const [cacheStatus, setCacheStatus] = useState({ phase: 'ocioso' })
   const [cli, setCli] = useState('')
+  const [bundledCli, setBundledCli] = useState(false)
   const [log, setLog] = useState('')
   const [report, setReport] = useState(null)
   const [busy, setBusy] = useState('')
@@ -96,7 +97,7 @@ function App() {
     job('Lendo instalação…', async () => {
       if (!api) throw Error('Abra a interface pelo aplicativo Electron.')
       const data = await api.init()
-      setPresets(data.presets); setStore(data.store); setRoot(data.root || ''); setCli(data.cli); setLog(data.log)
+      setPresets(data.presets); setStore(data.store); setRoot(data.root || ''); setCli(data.cli); setBundledCli(Boolean(data.bundledCli)); setLog(data.log)
       if (data.root) await scan()
     })
   }, [])
@@ -226,10 +227,10 @@ function App() {
           const result = await api.importPack()
           if (result) { setPresets(result.presets); loadPack(result.preset) }
         })}/>}
-      {tab === 'settings' && <Settings gamePath={gamePath} root={root} cli={cli} store={store} log={log} report={report}
+      {tab === 'settings' && <Settings gamePath={gamePath} root={root} cli={cli} bundledCli={bundledCli} store={store} log={log} report={report}
         busy={Boolean(busy)} canApply={canApply} onChooseRoot={chooseRoot} onScan={() => job('Atualizando catálogo…', scan)}
         cacheStatus={cacheStatus} onIndexIcons={() => api.indexIcons()}
-        onChooseCli={() => job('Selecionando CLI…', async () => setCli(await api.chooseCli()))}
+        onChooseCli={() => job('Selecionando CLI…', async () => { const next = await api.chooseCli(); if (next !== cli) setBundledCli(false); setCli(next) })}
         onDiagnose={() => job('Verificando arquivos…', async () => setReport(await api.diagnose()))}
         onForceApply={() => applyMods(true)}
         onRestore={() => job('Restaurando…', async () => {

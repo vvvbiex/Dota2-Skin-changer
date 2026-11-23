@@ -12,11 +12,20 @@ let root
 let busy = false
 let window
 let cli, iconSession, catalog
+const bundledFile = name => app.isPackaged ? path.join(process.resourcesPath, name)
+  : path.join(here, '..', name === 'icons-pack.zip' ? 'assets' : 'tools', name)
+const packPath = () => { const file = bundledFile('icons-pack.zip'); return fs.existsSync(file) ? file : '' }
+const bundledCli = () => { const file = bundledFile('Source2Viewer-CLI.exe'); return fs.existsSync(file) ? file : '' }
+const resolveCli = saved => saved && fs.existsSync(saved) ? saved : bundledCli() || saved || ''
 const iconWorkers = new Set()
 let progress = { phase: 'ocioso' }
 function publishProgress(value) {
   progress = value
   if (window && !window.isDestroyed()) window.webContents.send('iconProgress', value)
+}
+function autoIndexIcons() {
+  // Com o pacote embutido não há pré-cache em massa: só converte sob demanda o que faltar.
+  if (!packPath()) indexIcons()
 }
 function indexIcons() {
   if (!root || !catalog || !cli || iconSession?.indexing) return
@@ -37,7 +46,7 @@ const dataPath = name => path.join(app.getPath('userData'), name)
 const packFilters = [{ name: 'Predefinição de cosméticos (JSON)', extensions: ['json'] }]
 function createIconWorker() {
   const worker = new Worker(new URL('./icon-worker.js', import.meta.url),
-    { workerData: { root, cli, cache: dataPath('cache/icons') } })
+    { workerData: { root, cli, pack: packPath(), cache: dataPath('cache/icons') } })
   const session = { worker, pending: new Map(), next: 0 }
   iconWorkers.add(worker)
   worker.on('message', ({ id, result, progress }) => {
@@ -114,8 +123,8 @@ function handlers() {
     init() {
       const data = settings()
       root = data.root && fs.existsSync(path.join(data.root, 'game/dota/pak01_dir.vpk')) ? data.root : detectDota()
-      cli = data.decompiler || ''
-      return { root, cli, presets: data.presets, store: dataPath('presets.json'), log: dataPath('diagnostics.json') }
+      cli = resolveCli(data.decompiler)
+      return { root, cli, bundledCli: cli !== '' && cli === bundledCli(), iconPack: Boolean(packPath()), presets: data.presets, store: dataPath('presets.json'), log: dataPath('diagnostics.json') }
     },
     async choose() {
       if (busy) throw Error('Aguarde o processamento.')
@@ -138,7 +147,7 @@ function handlers() {
       save({ ...settings(), decompiler: candidate })
       cli = candidate
       resetIcons()
-      indexIcons()
+      autoIndexIcons()
       return cli
     },
     cachedIcons: images => itemIcons('lookup', images),
@@ -150,7 +159,7 @@ function handlers() {
     async scan() {
       const result = await run('scan')
       catalog = result
-      indexIcons()
+      autoIndexIcons()
       return catalog
     },
     apply: (selections, force) => diagnostic('apply', selections, force === true),

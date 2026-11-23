@@ -2,7 +2,7 @@ import { parentPort, workerData } from 'node:worker_threads'
 import { createIconReader } from '../core/icons.js'
 
 const controller = new AbortController()
-const icons = createIconReader(workerData.root, workerData.cache, workerData.cli, controller.signal)
+const icons = createIconReader(workerData.root, workerData.cache, workerData.cli, controller.signal, workerData.pack)
 parentPort.on('message', async ({ id, action, images }) => {
   if (action === 'close') {
     controller.abort()

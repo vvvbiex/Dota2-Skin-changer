@@ -19,6 +19,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Baixar Source2Viewer-CLI.exe (ValveResourceFormat)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force tools | Out-Null
+          gh release download --repo ValveResourceFormat/ValveResourceFormat --pattern 'cli-windows-x64.zip' --dir "$env:RUNNER_TEMP"
+          Expand-Archive "$env:RUNNER_TEMP/cli-windows-x64.zip" -DestinationPath tools -Force
+          if (-not (Test-Path tools/Source2Viewer-CLI.exe)) { throw 'Source2Viewer-CLI.exe não encontrado no pacote baixado.' }
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Baixar icons-pack.zip (release icons-pack-v1)
+        shell: pwsh
+        run: gh release download icons-pack-v1 -p icons-pack.zip -D assets --repo "$env:GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Gerar e publicar o instalador NSIS
         run: npm run release:github -- "$env:GITHUB_REF_NAME"
         env:

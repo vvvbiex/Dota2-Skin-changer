@@ -2,7 +2,7 @@ import React from 'react'
 import { isIndexingIcons } from './ItemArt.jsx'
 import { Icon } from './ui.jsx'
 
-export function Settings({ gamePath, root, cli, log, store, report, busy, canApply, onChooseRoot, onScan,
+export function Settings({ gamePath, root, cli, bundledCli, log, store, report, busy, canApply, onChooseRoot, onScan,
   cacheStatus, onIndexIcons, onChooseCli, onDiagnose, onForceApply, onRestore, onRecover }) {
   const indexing = isIndexingIcons(cacheStatus)
   return <div className="settings-grid view-entry">
@@ -16,10 +16,13 @@ export function Settings({ gamePath, root, cli, log, store, report, busy, canApp
     </section>
     <section className="panel setting">
       <h2>Ícones dos itens</h2>
-      <p className="muted">Selecione o CLI do ValveResourceFormat para preparar os ícones em segundo plano.</p>
-      <p className="path">{cli || 'CLI ainda não configurado'}</p>
-      <button type="button" disabled={busy} onClick={onChooseCli}>Selecionar Decompiler.exe ou Source2Viewer-CLI.exe</button>
-      <button type="button" disabled={!root || !cli || busy || indexing} onClick={onIndexIcons}>Preparar cache de ícones</button>
+      <p className="muted">Os ícones já acompanham o aplicativo. Texturas novas são convertidas sob demanda pelo CLI embutido.</p>
+      <p className="path">{cli ? (bundledCli ? 'CLI embutido detectado automaticamente' : cli) : 'CLI não encontrado (somente ícones embutidos e cache)'}</p>
+      <details className="advanced">
+        <summary>Opções avançadas</summary>
+        <button type="button" disabled={busy} onClick={onChooseCli}>Selecionar Decompiler.exe ou Source2Viewer-CLI.exe</button>
+        <button type="button" disabled={!root || !cli || busy || indexing} onClick={onIndexIcons}>Preparar cache de ícones</button>
+      </details>
       <p role="status">Cache {cacheStatus.phase}{cacheStatus.total ? ` · ${cacheStatus.done}/${cacheStatus.total}` : ''} {cacheStatus.message}</p>
     </section>
     <section className="panel setting wide-setting">

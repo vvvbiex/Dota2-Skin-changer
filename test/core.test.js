@@ -11,6 +11,7 @@ import { patchItemsGame } from '../core/patch.js'
 import { installMod, installModWithReport, restoreGame, editGameInfo } from '../core/install.js'
 import { compareSchemas, diagnose, sha } from '../core/diagnostics.js'
 import { createIconReader } from '../core/icons.js'
+import { writeZipStore, openZipStore } from '../core/zip.js'
 import { createPack, readPack } from '../core/packs.js'
 import { equipSet } from '../core/selections.js'
 
@@ -387,4 +388,45 @@ test('packs JSON preservam heróis, seleções globais e estilos e rejeitam dado
   assert.throws(() => readPack(JSON.stringify({ ...pack, version: 2 })), /incompatível/)
   assert.throws(() => createPack('Duplicado', [selection, selection]), /slot duplicado/)
   assert.throws(() => createPack('Inválido', [{ ...selection, itemId: '../2' }]), /seleção inválida/)
+})
+
+test('ícones: pacote embutido tem prioridade, depois cache de disco e, sem CLI, falha silenciosa', async t => {
+  const root = fakeInstall(t), cache = path.join(root, 'cache/icons')
+  const data = Buffer.from('vtex')
+  const record = Buffer.alloc(18)
+  record.writeUInt32LE(crc32(data)); record.writeUInt16LE(32767, 6)
+  record.writeUInt32LE(data.length, 12); record.writeUInt16LE(65535, 16)
+  const tree = Buffer.concat([Buffer.from('vtex_c\0panorama/images/econ\0test_png\0'), record, Buffer.alloc(3)])
+  const header = Buffer.alloc(12)
+  header.writeUInt32LE(0x55aa1234); header.writeUInt32LE(1, 4); header.writeUInt32LE(tree.length, 8)
+  fs.writeFileSync(path.join(root, 'game/dota/pak01_dir.vpk'), Buffer.concat([header, tree, data]))
+  const key = sha('panorama/images/econ/test_png.vtex_c:' + crc32(data))
+  const zip = path.join(root, 'icons-pack.zip'), webp = Buffer.from('RIFF....WEBPfake')
+  writeZipStore(zip, [[key + '.webp', webp], ['outro.webp', Buffer.from('x')]])
+  const reader = openZipStore(zip)
+  assert.deepEqual(reader.read(key + '.webp'), webp)
+  assert.equal(reader.read('ausente.webp'), null)
+  reader.close()
+
+  const icons = createIconReader(root, cache, '', undefined, zip)
+  const expected = { url: 'data:image/webp;base64,' + webp.toString('base64') }
+  assert.deepEqual(icons.lookup(['econ/test']), { 'econ/test': expected })
+  assert.deepEqual((await icons.get(['econ/test']))['econ/test'], expected)
+  const progress = []
+  await icons.index(['econ/test'], (...update) => progress.push(update))
+  assert.deepEqual(progress.at(-1), ['concluído', 1, 1])
+
+  // Sem o pacote: cache de disco e, sem CLI, o aviso de fallback.
+  const plain = createIconReader(root, cache, '', undefined, path.join(root, 'nao-existe.zip'))
+  assert.deepEqual(plain.lookup(['econ/test']), {})
+  assert.match((await plain.get(['econ/test']))['econ/test'].reason, /Configure/)
+  fs.mkdirSync(cache, { recursive: true })
+  const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64')
+  fs.writeFileSync(path.join(cache, key + '.png'), pixel)
+  assert.ok(plain.lookup(['econ/test'])['econ/test'].url.startsWith('data:image/png;base64,'))
+  // Ícone ausente do pacote usa o cache de disco.
+  const partial = path.join(root, 'parcial.zip')
+  writeZipStore(partial, [['outro.webp', Buffer.from('x')]])
+  const mixed = createIconReader(root, cache, '', undefined, partial)
+  assert.ok(mixed.lookup(['econ/test'])['econ/test'].url.startsWith('data:image/png;base64,'))
 })

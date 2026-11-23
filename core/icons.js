@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { baseArchive, sha } from './diagnostics.js'
 import { atomicWrite } from './install.js'
 import { openVpk } from './vpk.js'
+import { openZipStore } from './zip.js'
 
 const signature = Buffer.from('89504e470d0a1a0a', 'hex')
 const execute = promisify(execFile)
@@ -21,8 +22,10 @@ function png(file) {
     bytes.subarray(-8, -4).toString() === 'IEND' ? bytes : null
 }
 
-export function createIconReader(root, cache, cli, signal) {
+export function createIconReader(root, cache, cli, signal, packFile) {
   const archive = baseArchive(root)
+  let bundled = null
+  try { if (packFile && fs.existsSync(packFile)) bundled = openZipStore(packFile) } catch { bundled = null }
   let pack, stamp
   const pending = new Map()
   const attributes = new Set(Object.values(attributeIcons))
@@ -52,7 +55,13 @@ export function createIconReader(root, cache, cli, signal) {
       return resource(entry, image)
     })
   }
+  function packed(file) {
+    const data = bundled?.read(path.basename(file, '.png') + '.webp')
+    return data && { url: 'data:image/webp;base64,' + data.toString('base64') }
+  }
   function cached(file) {
+    const found = packed(file)
+    if (found) return found
     const data = png(file)
     return data && { url: 'data:image/png;base64,' + data.toString('base64') }
   }
@@ -130,7 +139,7 @@ export function createIconReader(root, cache, cli, signal) {
     let checked = 0
     for (const icon of entries.values()) {
       if (signal?.aborted) return
-      if (!png(icon.file)) missing.push(icon)
+      if (!bundled?.has(path.basename(icon.file, '.png') + '.webp') && !png(icon.file)) missing.push(icon)
       if (++checked % 64 === 0) {
         report('verificando', checked, entries.size)
         await yieldWorker()

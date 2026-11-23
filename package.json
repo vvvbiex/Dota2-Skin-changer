@@ -1,6 +1,6 @@
 {
   "name": "dota-local-skin-changer",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Editor local de cosméticos de Dota 2",
   "author": "Dota Local Skin Changer",
   "private": true,
@@ -18,7 +18,9 @@
     "test": "node --test",
     "dist": "npm run build:exe",
     "dist:win": "npm run build:exe",
-    "release:github": "node scripts/release-github.js"
+    "release:github": "node scripts/release-github.js",
+    "pack:icons": "node scripts/pack-icons.js",
+    "make:icon": "node scripts/make-icon.js"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -29,6 +31,7 @@
     "@vitejs/plugin-react": "^6.0.0",
     "electron": "^44.0.0",
     "electron-builder": "^26.0.0",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.1.0",
     "vite": "^8.0.0"
   },
@@ -52,16 +55,38 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "win": {
       "signExecutable": false,
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
-      ]
-    }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": ".",
+        "filter": [
+          "icons-pack.zip"
+        ]
+      },
+      {
+        "from": "tools",
+        "to": ".",
+        "filter": [
+          "Source2Viewer-CLI.exe",
+          "*.dll"
+        ]
+      }
+    ]
   }
 }

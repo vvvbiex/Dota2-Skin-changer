@@ -17,3 +17,4 @@ logs/
 /tools/**/*.tar
 /tools/**/*.gz
 /tools/**/*.msi
+assets/icons-pack.zip
