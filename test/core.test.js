@@ -257,6 +257,26 @@ test('aplica, reaplica e restaura em presença de atualização da Valve', async
   assert.equal(fs.existsSync(mod), false)
 })
 
+test('restaura o jogo preservando dados vizinhos e aceita repetir a restauração', async t => {
+  const root = fakeInstall(t)
+  const mod = await installMod(root, source)
+  const dir = path.dirname(mod)
+  for (const name of ['rpt', 'save']) {
+    fs.mkdirSync(path.join(dir, name))
+    fs.writeFileSync(path.join(dir, name, 'dados'), name)
+  }
+  await restoreGame(root)
+  await restoreGame(root)
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['rpt', 'save'])
+  for (const name of ['rpt', 'save']) {
+    assert.equal(fs.readFileSync(path.join(dir, name, 'dados'), 'utf8'), name)
+  }
+  assert.equal(fs.readFileSync(path.join(root, 'game/dota/gameinfo.gi'), 'utf8'), originalInfo)
+  fs.writeFileSync(mod, 'pacote sem recibo')
+  await assert.rejects(() => restoreGame(root), /outra instalação/)
+  assert.equal(fs.readFileSync(mod, 'utf8'), 'pacote sem recibo')
+})
+
 test('substitui um pak01_dir.vpk antigo mesmo com conteúdo idêntico e atualiza o timestamp', async t => {
   const root = fakeInstall(t)
   const patched = patchItemsGame(loadGame(root), [selection])

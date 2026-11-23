@@ -147,3 +147,9 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - Repositório no GitHub (`vvvbiex/Dota2-Skin-changer`) configurado para lançamento público: descrição curta (About) atualizada, tópicos adicionados (`dota2`, `skin-changer`, `electron`, `react`, `windows`, `vpk`, `modding`) e visibilidade alterada para pública.
 - Verificação: `npm.cmd test` passou (24/24 testes) e `npm.cmd run build:exe` gerou o instalador NSIS `Dota-2-Local-Skin-Changer-Setup.exe` versão `1.5.0` na raiz.
 - Commit enviado para `main` e tag `v1.5.0` enviada ao GitHub para publicar a Release pública `v1.5.0` com o novo instalador NSIS.
+
+## Restauração após aviso de verificação do VAC (pós-1.5.0)
+
+- A instalação local tinha o mod ativo. A restauração da v1.5.0 parava antes de remover o pacote quando encontrava as subpastas `rpt` e `save` em `game/dota_custom`. A mensagem do VAC não identifica sua causa. Os módulos de aplicação, diagnóstico e assinaturas eram idênticos entre as tags v1.4.0 e v1.5.0.
+- A restauração remove o VPK identificado pelo recibo e conserva o conteúdo vizinho. Ela pode ser repetida com a pasta preservada. Um VPK sem recibo continua protegido. Configurações e README orientam a restaurar, verificar os arquivos pela Steam e iniciar pela biblioteca sem reaplicar.
+- Na instalação local, a restauração corrigida removeu a montagem e o pacote. Foram conferidos os dados de `save`, `rpt` e as predefinições antes e depois. O arquivo de assinaturas resultante diferia do backup local. O teste de regressão cobre duas restaurações consecutivas e a proteção de um pacote sem recibo. Passaram 25 testes e o build do renderer.

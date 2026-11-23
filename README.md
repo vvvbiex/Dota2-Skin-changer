@@ -41,11 +41,13 @@ Para remover completamente todas as modificações feitas pelo aplicativo:
 
 O que essa ação faz:
 - Remove as linhas adicionadas pelo aplicativo em `game/dota/gameinfo.gi` e `game/dota/gameinfo_branchspecific.gi`, preservando eventuais atualizações feitas pela Valve.
-- Remove a pasta `game/dota_custom/` (incluindo `pak01_dir.vpk` e o arquivo de recibo).
+- Remove o pacote identificado pelo recibo e o próprio recibo. Se houver outros dados em `game/dota_custom/`, como as subpastas `save` e `rpt`, eles são preservados. O app remove a pasta quando ela fica vazia.
 - Remove as linhas adicionadas pelo aplicativo em `game/bin/win64/dota.signatures` e limpa o recibo/backup de assinaturas.
 - Preserva suas predefinições salvas no aplicativo (`%APPDATA%`).
 
-Se por algum motivo o `gameinfo.gi` ficar ausente ou corrompido, utilize **Configurações → Recuperar gameinfo.gi do backup**. Você também pode restaurar os arquivos oficiais a qualquer momento pela Steam em **Dota 2 → Propriedades → Arquivos instalados → Verificar integridade dos arquivos do jogo**.
+Se o VAC informar que não conseguiu verificar a máquina, conclua a restauração acima. Depois, na biblioteca Steam, abra **Dota 2 → Propriedades → Arquivos instalados → Verificar integridade dos arquivos do jogo**. Aguarde o término e inicie o Dota 2 diretamente pela biblioteca, sem reaplicar as skins.
+
+Se o `gameinfo.gi` estiver ausente ou corrompido, utilize **Configurações → Recuperar gameinfo.gi do backup**.
 
 ## Desenvolvimento local
 

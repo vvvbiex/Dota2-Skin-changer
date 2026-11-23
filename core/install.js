@@ -110,16 +110,18 @@ function verifyMountOrder(text, label) {
 }
 
 function inspectMod(files, recover = false) {
-  if (!exists(files.dir)) return null
-  if (!exists(files.receipt)) throw Error('A pasta dota_custom já existe e pertence a outra instalação.')
+  const dir = exists(files.dir)
+  if (!dir) return null
+  if (!dir.isDirectory()) throw Error('dota_custom não é uma pasta.')
+  if (!exists(files.receipt)) {
+    if (!exists(files.archive)) return null
+    throw Error('A pasta dota_custom já existe e pertence a outra instalação.')
+  }
   if (!exists(files.receipt)?.isFile() || (exists(files.archive) && !exists(files.archive).isFile())) {
     throw Error('A pasta dota_custom contém outros arquivos. A operação foi interrompida.')
   }
   const record = JSON.parse(fs.readFileSync(files.receipt, 'utf8'))
   if (record.app !== 'dota-local-skins' || !Array.isArray(record.hashes)) throw Error('Registro do mod inválido.')
-  if (fs.readdirSync(files.dir).some(name => ![ARCHIVE, RECEIPT].includes(name))) {
-    throw Error('A pasta dota_custom contém outros arquivos. A operação foi interrompida.')
-  }
   if (exists(files.archive)) {
     const hash = digest(fs.readFileSync(files.archive))
     if (!record.hashes.includes(hash)) {
@@ -193,6 +195,8 @@ async function clearMod(files) {
   const receipt = await fs.promises.readFile(files.receipt)
   await removeFile(files.receipt)
   try { await removeFile(files.dir, true) } catch (error) {
+    // O jogo pode guardar relatórios e saves ao lado do pacote do app.
+    if (error.code === 'ENOTEMPTY' || error.code === 'EEXIST') return
     await replaceFile(files.receipt, receipt)
     throw error
   }
