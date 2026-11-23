@@ -84,7 +84,28 @@ function locations(root) {
   for (const p of [game, dota, dir, info, backup]) {
     if (exists(p)?.isSymbolicLink()) throw Error('Caminho de instalação redirecionado: ' + p)
   }
-  return { dir, info, backup, archive, receipt }
+  const branch = path.join(dota, 'gameinfo_branchspecific.gi')
+  return { dir, info, backup, archive, receipt, branch, branchBackup: branch + '.local-skins.bak' }
+}
+
+// O Dota monta SearchPaths a partir de gameinfo_branchspecific.gi quando ele declara essa seção
+// (observado no console.log: dota_custom do gameinfo.gi era ignorado). Edita também esse arquivo.
+function branchPlan(files, enable) {
+  if (!exists(files.branch)?.isFile()) return null
+  const text = fs.readFileSync(files.branch, 'utf8')
+  try {
+    if (!searchPaths(text).some(n => n.kind === 'game' && n.dir === 'dota' && !n.condition)) return null
+  } catch { return null }
+  return { text, updated: editGameInfo(text, enable) }
+}
+
+function verifyMountOrder(text, label) {
+  const order = searchPaths(text)
+  const customAt = order.findIndex(n => n.kind === 'game' && n.dir === 'dota_custom')
+  const baseAt = order.findIndex(n => n.kind === 'game' && n.dir === 'dota' && !n.condition)
+  if (customAt < 0 || (baseAt >= 0 && customAt > baseAt)) {
+    throw Error(label + ': Game dota_custom não está acima de Game dota em SearchPaths.')
+  }
 }
 
 function inspectMod(files, recover = false) {
@@ -192,6 +213,7 @@ export async function installModWithReport(root, patchedText, { originalSchema =
   }
   const original = fs.readFileSync(files.info, 'utf8')
   const updated = editGameInfo(original, true)
+  const branch = branchPlan(files, true)
   const existing = current && !blocked
   if (current?.isDirectory()) await retryWrite(files.dir, () => writable(files.dir))
   if (existing) for (const entry of contents) {
@@ -203,13 +225,14 @@ export async function installModWithReport(root, patchedText, { originalSchema =
   const data = buildItemsVpk(patchedText)
   const hash = digest(data)
   if (!exists(files.backup)) await copyBackup(files.info, files.backup)
+  if (branch && !exists(files.branchBackup)) await copyBackup(files.branch, files.branchBackup)
   // Keep both hashes so a stopped update can be retried either side of the rename.
   let baseline
   try { baseline = consoleBaseline(root) } catch { /* Optional evidence when the client permits shared log reads. */ }
   const receipt = JSON.stringify({ app: 'dota-local-skins', source: digest(originalSchema), affected: validated.changed, console: baseline,
     hashes: [...new Set([prior, hash].filter(Boolean))] })
   const movedEntries = []
-  let preserved, created = false, receiptWritten = false, archiveWritten = false
+  let preserved, created = false, receiptWritten = false, archiveWritten = false, branchWritten = false
   try {
     if (blocked) {
       const destination = files.dir + '.backup-' + randomUUID()
@@ -245,6 +268,13 @@ export async function installModWithReport(root, patchedText, { originalSchema =
       throw Error('pak01_dir.vpk não foi atualizado: a data de modificação permaneceu antiga.')
     }
     if (readSchema(files.archive) !== patchedText) throw Error('O conteúdo relido do VPK diverge do patch.')
+    if (branch) {
+      branchWritten = true
+      await commitInfo(files.branch, branch.text, branch.updated)
+      const writtenBranch = fs.readFileSync(files.branch, 'utf8')
+      if (writtenBranch !== branch.updated) throw Error('gameinfo_branchspecific.gi mudou após a gravação.')
+      verifyMountOrder(writtenBranch, 'gameinfo_branchspecific.gi')
+    }
     await commitInfo(files.info, original, updated)
     const written = fs.readFileSync(files.info, 'utf8')
     if (written !== updated) throw Error('gameinfo.gi mudou após a gravação.')
@@ -257,6 +287,7 @@ export async function installModWithReport(root, patchedText, { originalSchema =
   }
   catch (error) {
     try {
+      if (branchWritten) await replaceFile(files.branch, branch.text)
       if (archiveWritten) {
         if (rollback) await replaceFile(files.archive, rollback)
         else await removeFile(files.archive)
@@ -298,5 +329,7 @@ export async function restoreGame(root, recoverBackup = false) {
     await commitInfo(files.info, original, editGameInfo(original, false))
   }
   if (prior !== null) await clearMod(files)
+  const branch = branchPlan(files, false)
+  if (branch && branch.text !== branch.updated) await commitInfo(files.branch, branch.text, branch.updated)
   return preserved
 }

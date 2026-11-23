@@ -122,6 +122,17 @@ export function diagnose(root) {
     return d.originalBytes + ' → ' + d.modifiedBytes + ' bytes · ' + d.sections + ' seções · ' + d.items +
       ' definições · IDs alterados: ' + (d.changed.join(', ') || 'nenhum')
   })
+  check('gameinfo_branchspecific.gi', () => {
+    const file = path.join(path.dirname(info), 'gameinfo_branchspecific.gi')
+    if (!fs.existsSync(file)) return 'Arquivo ausente: não participa do SearchPaths.'
+    let rows
+    try { rows = searchPaths(fs.readFileSync(file, 'utf8')) } catch { return 'Sem SearchPaths: não participa da montagem.' }
+    const base = rows.findIndex(n => n.kind === 'game' && n.dir === 'dota' && !n.condition)
+    if (base < 0) return 'Sem Game dota: não participa da montagem.'
+    const custom = rows.findIndex(n => n.kind === 'game' && n.dir === 'dota_custom')
+    if (custom < 0 || custom > base) throw Error('gameinfo_branchspecific.gi define SearchPaths sem Game dota_custom acima de Game dota. O Dota ignora o mod. Reaplique.')
+    return 'Game dota_custom acima de Game dota.'
+  })
   try { report.client = clientEvidence(root, receipt?.console) }
   catch (e) { report.client = 'Console indisponível para leitura: ' + e.message }
   return report

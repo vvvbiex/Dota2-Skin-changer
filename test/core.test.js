@@ -270,6 +270,19 @@ test('substitui um pak01_dir.vpk antigo mesmo com conteúdo idêntico e atualiza
   assert.ok(fs.statSync(file).mtimeMs > old.getTime() + 60_000)
 })
 
+test('monta dota_custom também em gameinfo_branchspecific.gi quando ele define SearchPaths e restaura', async t => {
+  const root = fakeInstall(t)
+  const branch = path.join(root, 'game/dota/gameinfo_branchspecific.gi')
+  const text = '"GameInfo"\r\n{\r\n FileSystem { SearchPaths {\r\n\tGame\tOutroApp\r\n\tGame\tdota\r\n\tGame\tcore\r\n } }\r\n}\r\n'
+  fs.writeFileSync(branch, text)
+  await installMod(root, patchItemsGame(loadGame(root), [selection]))
+  const edited = fs.readFileSync(branch, 'utf8')
+  assert.ok(edited.indexOf('dota_custom') > edited.indexOf('OutroApp') && edited.indexOf('dota_custom') < edited.indexOf('Game\tdota\r\n'))
+  assert.equal(diagnose(root).checks.find(c => c.label === 'gameinfo_branchspecific.gi').ok, true)
+  await restoreGame(root)
+  assert.equal(fs.readFileSync(branch, 'utf8'), text)
+})
+
 test('protege VPK alterado na restauração e montagem de terceiros', async t => {
   const root = fakeInstall(t)
   assert.throws(() => editGameInfo(originalInfo.replace('\tGame core', '\tGame dota_custom\r\n\tGame core'), true), /outra configuração/)
