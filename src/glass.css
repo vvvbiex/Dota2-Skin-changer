@@ -918,6 +918,66 @@ dialog.picker-panel .taunt-dock { bottom: 20px; right: 20px; }
   font-size: 12px;
   padding: 28px 16px;
 }
+.taunt-unavailable {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 32px 24px;
+  max-width: 340px;
+  animation: blur-reveal .32s var(--ease-out) both;
+}
+.taunt-unavail-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .08);
+  margin-bottom: 4px;
+}
+[data-theme="light"] .taunt-unavail-icon {
+  background: rgba(20, 20, 24, .05);
+  border-color: rgba(20, 20, 24, .09);
+}
+.taunt-unavail-title {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ink);
+  letter-spacing: -.01em;
+}
+.taunt-unavail-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.taunt-unavail-note {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: .85;
+}
+.taunt-audio-fallback-btn {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(180deg, #ff5147, #e53227);
+  border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: 0 8px 20px -6px rgba(255, 59, 48, .55), 0 1px 0 rgba(255, 255, 255, .22) inset;
+  cursor: pointer;
+  transition: transform .18s var(--ease-out), filter .18s ease;
+}
+.taunt-audio-fallback-btn:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.taunt-audio-fallback-btn:active { transform: translateY(0) scale(.98); }
 .taunt-spinner {
   width: 24px;
   height: 24px;

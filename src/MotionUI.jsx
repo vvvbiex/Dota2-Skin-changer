@@ -296,12 +296,20 @@ export function useAudioPreview(api) {
   const offsetRef = useRef(0)
   const startedAtRef = useRef(0)
   const cacheRef = useRef(new Map())
+  const blobUrlRef = useRef(null)
   const reqRef = useRef(0)
   const videoReqRef = useRef(0)
   const stateRef = useRef(null)
   const videoRef = useRef(null)
   stateRef.current = state
   videoRef.current = video
+
+  const revokeVideoUrl = useCallback(() => {
+    if (blobUrlRef.current) {
+      try { URL.revokeObjectURL(blobUrlRef.current) } catch { /* ignorar */ }
+      blobUrlRef.current = null
+    }
+  }, [])
 
   const ensureContext = useCallback(async () => {
     if (!ctxRef.current) {
@@ -419,12 +427,16 @@ export function useAudioPreview(api) {
 
   useEffect(() => () => {
     stopSource()
+    revokeVideoUrl()
     ctxRef.current?.close().catch(() => {})
-  }, [stopSource])
+  }, [revokeVideoUrl, stopSource])
 
-  const openAudio = useCallback(async (item, iconUrl = null) => {
+  const openAudio = useCallback(async (item, iconUrl = null, prefetchedRes = null) => {
     if (!api?.audioPreview || !item?.audio) return
     videoReqRef.current++
+    revokeVideoUrl()
+    companionRef.current = null
+    if (gainRef.current) gainRef.current.gain.value = 0.8
     setVideo(null)
     const cur = stateRef.current
     if (cur && cur.itemId === item.id && !cur.error && !cur.loading) {
@@ -461,7 +473,7 @@ export function useAudioPreview(api) {
     })
     try {
       await ensureContext()
-      const res = await api.audioPreview(item.audio)
+      const res = prefetchedRes || await api.audioPreview(item.audio)
       if (reqRef.current !== reqId) return
       if (!res?.tracks?.length || !res.initial) {
         setState(prev => prev ? { ...prev, loading: false, error: res?.reason || 'Sem prévia disponível.' } : prev)
@@ -485,16 +497,23 @@ export function useAudioPreview(api) {
       if (reqRef.current !== reqId) return
       setState(prev => prev ? { ...prev, loading: false, playing: false, error: e.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '') } : prev)
     }
-  }, [api, decodeTrack, ensureContext, handleEnded, startBuffer, stopSource])
+  }, [api, decodeTrack, ensureContext, handleEnded, revokeVideoUrl, startBuffer, stopSource])
 
   const setMuted = useCallback(muted => {
     if (gainRef.current) gainRef.current.gain.value = muted ? 0 : 0.8
   }, [])
 
-  const replayCompanion = useCallback(async (loop = false) => {
-    if (!companionRef.current) return
-    try { await startBuffer(companionRef.current, 0, null, { loop }) } catch { /* ignorar */ }
-  }, [startBuffer])
+  const playCompanionAt = useCallback(async (offset = 0, { loop = false } = {}) => {
+    const buf = companionRef.current
+    if (!buf || !videoRef.current?.url) return
+    const safeOffset = Math.max(0, Number.isFinite(offset) ? offset : 0)
+    if (!loop && safeOffset >= buf.duration - 0.02) {
+      stopSource()
+      return
+    }
+    const targetOffset = loop && buf.duration > 0 ? safeOffset % buf.duration : safeOffset
+    try { await startBuffer(buf, targetOffset, null, { loop }) } catch { /* ignorar */ }
+  }, [startBuffer, stopSource])
 
   const pauseCompanion = useCallback(() => {
     stopSource()
@@ -505,6 +524,7 @@ export function useAudioPreview(api) {
     if (videoRef.current?.itemId === item.id) {
       videoReqRef.current++
       stopSource()
+      revokeVideoUrl()
       companionRef.current = null
       if (gainRef.current) gainRef.current.gain.value = 0.8
       setVideo(null)
@@ -512,12 +532,26 @@ export function useAudioPreview(api) {
     }
     reqRef.current++
     stopSource()
+    revokeVideoUrl()
     bufferRef.current = null
     companionRef.current = null
     if (gainRef.current) gainRef.current.gain.value = 0.8
     setState(null)
     const reqId = ++videoReqRef.current
-    setVideo({ item, itemId: item.id, name: item.name, iconUrl, loading: true, url: null, kind: 'video', cached: false, hasAudio: false, error: '' })
+    setVideo({
+      item,
+      itemId: item.id,
+      name: item.name,
+      iconUrl,
+      loading: true,
+      url: null,
+      kind: 'video',
+      cached: false,
+      hasAudio: false,
+      unavailable: false,
+      reason: '',
+      prefetchedAudio: null,
+    })
     try {
       await ensureContext().catch(() => {})
       const [vidRes, audRes] = await Promise.all([
@@ -533,19 +567,52 @@ export function useAudioPreview(api) {
         if (videoReqRef.current !== reqId) return
         companionRef.current = compBuf
         const kind = vidRes.kind || 'video'
-        setVideo(prev => prev ? { ...prev, loading: false, url: vidRes.url, kind, cached: Boolean(vidRes.cached), hasAudio: Boolean(compBuf), error: '' } : prev)
-        if (compBuf) await startBuffer(compBuf, 0, null, { loop: kind === 'image' })
+        let mediaUrl = vidRes.url
+        if (kind === 'video' && vidRes.url.startsWith('data:')) {
+          try {
+            const bytes = dataUrlToArrayBuffer(vidRes.url)
+            const blobUrl = URL.createObjectURL(new Blob([bytes], { type: vidRes.mime || 'video/webm' }))
+            blobUrlRef.current = blobUrl
+            mediaUrl = blobUrl
+          } catch { mediaUrl = vidRes.url }
+        }
+        // O áudio sincronizado só inicia quando o primeiro frame real do vídeo/imagem for apresentado
+        setVideo(prev => prev ? {
+          ...prev,
+          loading: false,
+          url: mediaUrl,
+          kind,
+          cached: Boolean(vidRes.cached),
+          hasAudio: Boolean(compBuf),
+          unavailable: false,
+          reason: '',
+          prefetchedAudio: null,
+        } : prev)
         return
       }
-      // Fallback automático para o áudio local do VPK se o vídeo não existir na Wiki ou estiver offline
-      setVideo(null)
-      await openAudio(item, iconUrl)
+      const hasAudio = Boolean(audRes?.tracks?.length && audRes?.initial)
+      setVideo(prev => prev ? {
+        ...prev,
+        loading: false,
+        url: null,
+        unavailable: true,
+        reason: vidRes?.reason || 'Esta provocação não possui vídeo disponível na Liquipedia.',
+        hasAudio,
+        prefetchedAudio: hasAudio ? audRes : null,
+      } : prev)
     } catch {
       if (videoReqRef.current !== reqId) return
-      setVideo(null)
-      await openAudio(item, iconUrl)
+      setVideo(prev => prev ? {
+        ...prev,
+        loading: false,
+        url: null,
+        unavailable: true,
+        reason: 'Não foi possível carregar o vídeo da provocação.',
+        hasAudio: false,
+        prefetchedAudio: null,
+      } : prev)
     }
-  }, [api, decodeTrack, ensureContext, openAudio, startBuffer, stopSource])
+  }, [api, decodeTrack, ensureContext, openAudio, revokeVideoUrl, stopSource])
 
   const open = useCallback((item, iconUrl = null) => {
     if (item?.audio?.kind === 'taunt' && api?.tauntPreview) return openVideo(item, iconUrl)
@@ -555,21 +622,23 @@ export function useAudioPreview(api) {
   const closeVideo = useCallback(() => {
     videoReqRef.current++
     stopSource()
+    revokeVideoUrl()
     companionRef.current = null
     if (gainRef.current) gainRef.current.gain.value = 0.8
     setVideo(null)
-  }, [stopSource])
+  }, [revokeVideoUrl, stopSource])
 
   const closeAll = useCallback(() => {
     reqRef.current++
     videoReqRef.current++
     stopSource()
+    revokeVideoUrl()
     bufferRef.current = null
     companionRef.current = null
     if (gainRef.current) gainRef.current.gain.value = 0.8
     setState(null)
     setVideo(null)
-  }, [stopSource])
+  }, [revokeVideoUrl, stopSource])
 
   const togglePlay = useCallback(async () => {
     const cur = stateRef.current
@@ -608,13 +677,21 @@ export function useAudioPreview(api) {
     setState(null)
   }, [stopSource])
 
-  return { state, video, analyserRef, open, openAudio, togglePlay, selectTrack, seek, close, closeVideo, closeAll, setMuted, replayCompanion, pauseCompanion }
+  return { state, video, analyserRef, open, openAudio, togglePlay, selectTrack, seek, close, closeVideo, closeAll, setMuted, playCompanionAt, pauseCompanion }
 }
 
 function VideoMark({ size = 13 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" style={{ flex: 'none' }}>
     <rect x="2.5" y="5" width="14" height="14" rx="3"/>
     <path d="M16.5 10l5-3v10l-5-3z" fill="currentColor" stroke="none"/>
+  </svg>
+}
+
+function VideoOffMark({ size = 24 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ flex: 'none' }}>
+    <path d="M10.66 5H14a2.5 2.5 0 012.5 2.5v3.34l5-3.34v9l-2.6-1.73"/>
+    <path d="M16.5 16.5A2.5 2.5 0 0114 19H5a2.5 2.5 0 01-2.5-2.5v-9A2.5 2.5 0 015 5h.5"/>
+    <path d="M2.5 2.5l19 19"/>
   </svg>
 }
 
@@ -641,24 +718,62 @@ export function AudioPreviewButton({ item, iconUrl, ctrl, compact = false }) {
 function TauntVideoDock({ ctrl }) {
   const video = ctrl?.video
   const mediaRef = useRef(null)
+  const syncGenRef = useRef(0)
+  const vfcRef = useRef(null)
+  const expectLoopRestartRef = useRef(false)
   const [paused, setPaused] = useState(false)
   const [muted, setMuted] = useState(false)
 
+  const cancelPendingSync = useCallback(() => {
+    syncGenRef.current++
+    const el = mediaRef.current
+    if (el && vfcRef.current != null && typeof el.cancelVideoFrameCallback === 'function') {
+      try { el.cancelVideoFrameCallback(vfcRef.current) } catch { /* ignorar */ }
+    }
+    vfcRef.current = null
+  }, [])
+
+  const scheduleAudioSync = useCallback(el => {
+    cancelPendingSync()
+    if (!el || el.paused || el.ended) return
+    const gen = syncGenRef.current
+    const syncFrame = (_now, metadata) => {
+      vfcRef.current = null
+      if (syncGenRef.current !== gen || el.paused || el.ended) return
+      const mediaTime = Number.isFinite(metadata?.mediaTime) ? metadata.mediaTime : el.currentTime
+      if (expectLoopRestartRef.current && mediaTime > 0.35 && typeof el.requestVideoFrameCallback === 'function') {
+        vfcRef.current = el.requestVideoFrameCallback(syncFrame)
+        return
+      }
+      expectLoopRestartRef.current = false
+      ctrl.playCompanionAt(mediaTime, { loop: false })
+    }
+    if (typeof el.requestVideoFrameCallback === 'function') {
+      vfcRef.current = el.requestVideoFrameCallback(syncFrame)
+    } else {
+      expectLoopRestartRef.current = false
+      ctrl.playCompanionAt(el.currentTime, { loop: false })
+    }
+  }, [cancelPendingSync, ctrl])
+
   const setCtrlMuted = ctrl?.setMuted
   useEffect(() => {
+    cancelPendingSync()
+    expectLoopRestartRef.current = false
     setPaused(false)
     setMuted(false)
     setCtrlMuted?.(false)
-  }, [video?.itemId, setCtrlMuted])
+    return () => cancelPendingSync()
+  }, [video?.itemId, video?.url, setCtrlMuted, cancelPendingSync])
 
   function toggleVideo() {
     const el = mediaRef.current
     if (!el) return
     if (el.paused) {
-      el.play().catch(() => {})
-      ctrl.replayCompanion(false)
       setPaused(false)
+      el.play().catch(() => {})
     } else {
+      cancelPendingSync()
       el.pause()
       ctrl.pauseCompanion()
       setPaused(true)
@@ -673,13 +788,39 @@ function TauntVideoDock({ ctrl }) {
     })
   }
 
+  function handleVideoPlaying(event) {
+    setPaused(false)
+    scheduleAudioSync(event.currentTarget)
+  }
+
+  function handleVideoPause(event) {
+    cancelPendingSync()
+    ctrl.pauseCompanion()
+    if (!event.currentTarget.ended) setPaused(true)
+  }
+
+  function handleVideoWaiting() {
+    cancelPendingSync()
+    ctrl.pauseCompanion()
+  }
+
   function handleVideoEnded() {
     const el = mediaRef.current
-    if (!el || paused) return
+    cancelPendingSync()
+    ctrl.pauseCompanion()
+    if (!el) return
+    expectLoopRestartRef.current = true
     el.currentTime = 0
     el.play().catch(() => {})
-    ctrl.replayCompanion(false)
   }
+
+  const subtitle = video
+    ? video.loading
+      ? 'Buscando vídeo na Liquipedia…'
+      : video.unavailable
+        ? 'Prévia de vídeo indisponível'
+        : (video.cached ? 'Provocação · Cache local' : 'Provocação · Dota 2 Wiki') + (video.hasAudio ? ' · Som VPK' : '')
+    : ''
 
   return <AnimatePresence>
     {video && <motion.aside className="taunt-dock" aria-label="Prévia da provocação"
@@ -692,7 +833,7 @@ function TauntVideoDock({ ctrl }) {
         <span className="nlm-badge" aria-hidden="true"><VideoMark size={16}/></span>
         <div className="nlm-titles">
           <strong title={video.name}>{video.name}</strong>
-          <small>{video.loading ? 'Buscando vídeo na Liquipedia…' : (video.cached ? 'Provocação · Cache local' : 'Provocação · Dota 2 Wiki') + (video.hasAudio ? ' · Som VPK' : '')}</small>
+          <small>{subtitle}</small>
         </div>
         <div className="nlm-controls">
           {video.url && (video.kind === 'video' || video.hasAudio) && <button type="button" className="nlm-ctrl"
@@ -720,10 +861,28 @@ function TauntVideoDock({ ctrl }) {
           <span className="taunt-spinner"/>
           <span>Carregando clipe…</span>
         </div>}
+        {!video.loading && video.unavailable && <div className="taunt-unavailable">
+          <span className="taunt-unavail-icon" aria-hidden="true"><VideoOffMark size={24}/></span>
+          <strong className="taunt-unavail-title">Prévia de vídeo não disponível</strong>
+          <p className="taunt-unavail-desc">{video.reason}</p>
+          {video.hasAudio
+            ? <button type="button" className="taunt-audio-fallback-btn"
+                onClick={() => ctrl.openAudio(video.item, video.iconUrl, video.prefetchedAudio)}>
+                <NotebookMark size={14}/>
+                <span>Ouvir prévia de áudio</span>
+              </button>
+            : <small className="taunt-unavail-note">Sem áudio local disponível para esta provocação.</small>}
+        </div>}
         {!video.loading && video.url && (video.kind === 'image'
-          ? <img className="taunt-media" src={video.url} alt={video.name}/>
-          : <video ref={mediaRef} className="taunt-media" src={video.url} autoPlay playsInline muted={muted}
-              onEnded={handleVideoEnded} onClick={toggleVideo}/>)}
+          ? <img className="taunt-media" src={video.url} alt={video.name}
+              onLoad={() => ctrl.playCompanionAt(0, { loop: true })}/>
+          : <video ref={mediaRef} className="taunt-media" src={video.url} autoPlay playsInline
+              muted={muted || video.hasAudio}
+              onPlaying={handleVideoPlaying}
+              onPause={handleVideoPause}
+              onWaiting={handleVideoWaiting}
+              onEnded={handleVideoEnded}
+              onClick={toggleVideo}/>)}
       </div>
     </motion.aside>}
   </AnimatePresence>
