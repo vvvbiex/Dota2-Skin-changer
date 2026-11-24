@@ -154,3 +154,11 @@ Na revisão do parser e cache, passaram 17 testes e o build do Vite. A instalaç
 - A restauração remove o VPK identificado pelo recibo e conserva o conteúdo vizinho. Ela pode ser repetida com a pasta preservada. Um VPK sem recibo continua protegido. Configurações e README orientam a restaurar, verificar os arquivos pela Steam e iniciar pela biblioteca sem reaplicar.
 - Na instalação local, a restauração corrigida removeu a montagem e o pacote. Foram conferidos os dados de `save`, `rpt` e as predefinições antes e depois. O arquivo de assinaturas resultante diferia do backup local. O teste de regressão cobre duas restaurações consecutivas e a proteção de um pacote sem recibo. Passaram 25 testes e o build do renderer.
 - Após a restauração, a Steam verificou o Dota 2 (AppID 570, build 26877585) e concluiu sem erro. A busca de partidas com o jogo restaurado continua pendente de confirmação dentro do cliente.
+
+
+## Versão 1.5.1 · Restauração segura preservando `save` e `rpt`
+
+- Usuário confirmou dentro do Dota 2 que a sessão online voltou a funcionar normalmente sem o aviso do VAC após restaurar e verificar os arquivos pela Steam.
+- Versão atualizada para `1.5.1` em `package.json` e `package-lock.json` empacotando a correção de restauração (`01d5649`), as orientações atualizadas em `Settings.jsx` e `README.md`, e o teste de regressão.
+- Verificação: `npm.cmd test` passou (25/25 testes) e `npm.cmd run build:exe` gerou `Dota-2-Local-Skin-Changer-Setup.exe` versão `1.5.1` na raiz (`FileVersion` e `ProductVersion` confirmados como `1.5.1`).
+- Commit enviado para `main` e tag `v1.5.1` publicada no GitHub para gerar e disponibilizar a Release pública `v1.5.1`.
